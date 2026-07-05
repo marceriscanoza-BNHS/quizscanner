@@ -50,7 +50,7 @@
                         <i data-lucide="moon" id="moonIcon" class="w-5 h-5"></i>
                     </button>
                     <!-- Settings Button -->
-                    <button id="openSettingsBtn" class="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition">
+                    <button id="openSettingsBtn" class="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition" title="API Settings">
                         <i data-lucide="key" class="w-4 h-4"></i>
                         <span class="hidden sm:inline">API Setup</span>
                     </button>
@@ -92,6 +92,21 @@
                             <div>
                                 <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Student Name</label>
                                 <input type="text" id="studentName" placeholder="e.g. Alex Johnson" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm focus:outline-none focus:border-brand-500">
+                            </div>
+                        </div>
+
+                        <!-- Handwriting Recovery Settings -->
+                        <div class="p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                            <div class="flex items-start space-x-2.5">
+                                <input type="checkbox" id="penmanshipRecovery" checked class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500">
+                                <div class="space-y-0.5">
+                                    <label for="penmanshipRecovery" class="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer block select-none">
+                                        Intelligent Penmanship Recovery
+                                    </label>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        Automatically translates messy handwriting, structural typos, and illegible words (e.g., "earjh" ➔ "earth") using surrounding contextual clues.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -408,6 +423,7 @@
         const resultsLoader = document.getElementById('resultsLoader');
         const resultsDashboard = document.getElementById('resultsDashboard');
         const loadDemoBtn = document.getElementById('loadDemoBtn');
+        const penmanshipRecovery = document.getElementById('penmanshipRecovery');
         
         // Report Dashboard Items
         const reportAssignmentMeta = document.getElementById('reportAssignmentMeta');
@@ -631,6 +647,7 @@
 
             // Format rubric parameters to pass directly to the Model Prompt
             const criteriaDetails = state.rubrics.map(r => `Criteria: "${r.label}" (Maximum Score of ${r.max} points)`).join('\n');
+            const runPenmanshipRecovery = penmanshipRecovery.checked;
 
             const systemInstruction = "You are a professional educational assessor/grader. Your task is to perform handwritten document OCR parsing and comprehensively grade submissions in structured JSON format based on specific teacher-configured criteria.";
 
@@ -639,13 +656,15 @@
                 Category of work: ${assignmentCategory.value}.
 
                 1. Execute high-precision Handwriting OCR. Transcribe all text accurately, retaining paragraphs and styling.
+                   ${runPenmanshipRecovery ? `IMPORTANT PENMANSHIP OPTIMIZATION: If the student has messy, bad, or distorted handwriting where letters look mangled (e.g., 'earjh' or 'undergrouth'), use surrounding sentence syntax and contextual reasoning to automatically resolve and transcribe them into the correct intended word (e.g., 'earth', 'undergrowth'). Make sure to document each of these auto-corrected penmanship instances in the 'annotations' array using type 'penmanship' so the teacher is aware.` : ""}
+
                 2. Evaluate the work against these customizable rubric dimensions:
                 ${criteriaDetails}
 
                 3. Identify detailed grammar, spelling, punctuation, or style flaws. For each flaw:
                    - originalSnippet: The exact phrase/word from the text.
                    - correction: The recommended correction.
-                   - type: Choose from: spelling, grammar, punctuation, style, coherence.
+                   - type: Choose from: spelling, grammar, punctuation, style, coherence, penmanship (only for auto-corrected bad handwriting).
                    - note: High-level teacher feedback as to why.
 
                 4. Calculate AI probability score (0-100) determining likelihood of AI generated content alongside logical reasoning details.
@@ -662,7 +681,7 @@
                         "reasoning": "stylistic markers analysis explanation"
                     },
                     "annotations": [
-                        { "originalSnippet": "exact phrase from transcription", "correction": "suggested revision", "type": "spelling/grammar/style", "note": "explanation" }
+                        { "originalSnippet": "exact phrase from transcription", "correction": "suggested revision", "type": "spelling/grammar/style/penmanship", "note": "explanation" }
                     ]
                 }
             `;
@@ -874,6 +893,7 @@
         // Color coding themes helper functions
         function getThemeBorderAccent(type) {
             const t = (type || '').toLowerCase();
+            if (t.includes('penmanship') || t.includes('ocr') || t.includes('handwriting')) return 'border-teal-400 dark:border-teal-500';
             if (t.includes('spell') || t.includes('typo')) return 'border-rose-400 dark:border-rose-500';
             if (t.includes('gram')) return 'border-amber-400 dark:border-amber-500';
             if (t.includes('punctuat')) return 'border-blue-400 dark:border-blue-500';
@@ -882,6 +902,7 @@
 
         function getBadgeThemeColor(type) {
             const t = (type || '').toLowerCase();
+            if (t.includes('penmanship') || t.includes('ocr') || t.includes('handwriting')) return 'bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:text-teal-400';
             if (t.includes('spell') || t.includes('typo')) return 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-400';
             if (t.includes('gram')) return 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400';
             if (t.includes('punctuat')) return 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400';
@@ -911,6 +932,8 @@
                     underlineColor = 'decoration-blue-500/80 hover:bg-blue-100/40 dark:hover:bg-blue-900/20';
                 } else if (type.includes('style') || type.includes('coherence')) {
                     underlineColor = 'decoration-indigo-500/80 hover:bg-indigo-100/40 dark:hover:bg-indigo-900/20';
+                } else if (type.includes('penmanship') || type.includes('ocr') || type.includes('handwriting')) {
+                    underlineColor = 'decoration-teal-500/80 hover:bg-teal-100/40 dark:hover:bg-teal-900/20';
                 }
 
                 html = html.replace(regex, `<span class="cursor-pointer underline decoration-2 decoration-dashed underline-offset-4 cursor-help transition ${underlineColor}" data-index="${idx}">$1</span>`);
@@ -994,7 +1017,7 @@
                     reasoning: "High variance in syllable choices and specific human spelling anomalies indicative of authentic human creation."
                 },
                 annotations: [
-                    { originalSnippet: "undergrouth", correction: "undergrowth", type: "spelling", note: "Spelled with an 'o' instead of 'ou' in English." },
+                    { originalSnippet: "undergrouth", correction: "undergrowth", type: "penmanship", note: "Intelligent Penmanship Recovery: Automatically resolved messy ink structure of 'undergrouth' to 'undergrowth' using surrounding poetry syntax context." },
                     { originalSnippet: "yellow wood", correction: "yellow wood,", type: "punctuation", note: "Add comma to close parenthetical setting descriptor smoothly." },
                     { originalSnippet: "Because it was", correction: "because it was", type: "grammar", note: "Lower case recommended following semi-colon." }
                 ]
