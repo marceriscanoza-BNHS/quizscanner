@@ -1,1834 +1,1008 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-slate-50 dark:bg-slate-900">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenGrade - Premium OMR Scanner & Sheet Generator</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <!-- Dexie.js for IndexedDB Storage -->
-  <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
-  <!-- html2canvas for High Fidelity PNG Export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-    }
-    .mono {
-      font-family: 'JetBrains Mono', monospace;
-    }
-    
-    /* Bulletproof Bubble Styling for HTML2Canvas & Print Engines */
-    .sheet-bubble {
-      width: 22px;
-      height: 22px;
-      border: 1.8px solid #0f172a;
-      border-radius: 9999px;
-      text-align: center;
-      line-height: 19px; /* Offsets border height precisely for vertical center alignment */
-      font-size: 10px;
-      font-weight: 800;
-      color: #0f172a;
-      display: inline-block;
-      box-sizing: border-box;
-      background-color: #ffffff;
-    }
-
-    /* Force Light Theme Isolation to prevent Browser Dark Mode Color Inversions */
-    #target-sheet-node {
-      background-color: #ffffff !important;
-      color: #0f172a !important;
-      border-color: #0f172a !important;
-    }
-    #target-sheet-node * {
-      color: #0f172a !important;
-      border-color: #0f172a !important;
-    }
-    #target-sheet-node .text-slate-400, 
-    #target-sheet-node .text-slate-500,
-    #target-sheet-node h4 {
-      color: #64748b !important; /* Keep column labels & subtitles a distinguished medium gray */
-    }
-    #target-sheet-node .sheet-bubble {
-      background-color: #ffffff !important;
-      color: #0f172a !important;
-      border-color: #0f172a !important;
-    }
-
-    /* Print Specific Rules overriding all utilities */
-    @media print {
-      body {
-        background: white !important;
-        color: black !important;
-      }
-      /* Fully hide interactive layouts */
-      header, main, footer, #toast-container, canvas, video {
-        display: none !important;
-      }
-      /* Expose and format print zone specifically */
-      #printable-area {
-        display: block !important;
-        visibility: visible !important;
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        max-width: 100%;
-        margin: 0;
-        padding: 0;
-        background: white !important;
-        color: black !important;
-      }
-      #printable-area * {
-        visibility: visible !important;
-      }
-    }
-
-    /* Hide scrollbars but keep functionality */
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 6px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: rgba(15, 23, 42, 0.3);
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: rgba(99, 102, 241, 0.5);
-      border-radius: 4px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: rgba(99, 102, 241, 0.8);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarkFlow AI - Hand-written Project Grading & OCR</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f5f3ff',
+                            100: '#ede9fe',
+                            500: '#8b5cf6',
+                            600: '#7c3aed',
+                            700: '#6d28d9',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col antialiased">
-
-  <!-- Custom Alert Overlay substitutes -->
-  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
-
-  <!-- Header -->
-  <header class="bg-slate-800 border-b border-slate-700 py-4 px-6 sticky top-0 z-40 no-print shadow-md">
-    <div class="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-center gap-4">
-      <div class="flex items-center gap-3">
-        <div class="bg-indigo-600 text-white p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2H-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
-          </svg>
-        </div>
-        <div>
-          <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            OpenGrade Pro <span class="text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-full font-semibold">v2.1 OMR</span>
-          </h1>
-          <p class="text-xs text-slate-400">Smart OMR Scanner • AI Handwriting recognition • Dexie local db</p>
-        </div>
-      </div>
-      
-      <!-- Navigation -->
-      <nav class="flex bg-slate-950/60 p-1 rounded-xl border border-slate-700/50 flex-wrap justify-center">
-        <button onclick="switchTab('tab-key')" id="btn-tab-key" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 bg-indigo-600 text-white shadow-sm">
-          🔑 Key Creator
-        </button>
-        <button onclick="switchTab('tab-sheet')" id="btn-tab-sheet" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-slate-400 hover:text-white">
-          🖨️ Sheet Generator
-        </button>
-        <button onclick="switchTab('tab-scan')" id="btn-tab-scan" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-slate-400 hover:text-white">
-          📷 Live Scan
-        </button>
-        <button onclick="switchTab('tab-history')" id="btn-tab-history" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-slate-400 hover:text-white">
-          📊 Gradebook
-        </button>
-      </nav>
-    </div>
-  </header>
-
-  <!-- Main Content Area -->
-  <main class="flex-grow max-w-7xl w-full mx-auto p-4 md:p-6 no-print">
-
-    <!-- TAB 1: ANSWER KEY CREATOR & TEST MANAGER -->
-    <section id="tab-key" class="tab-content block space-y-6">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <!-- Configuration Side -->
-        <div class="bg-slate-800/85 border border-slate-700/60 rounded-2xl p-6 shadow-xl flex flex-col justify-between h-fit space-y-6">
-          <div>
-            <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              Test Config
-            </h2>
-            <div class="space-y-4">
-              <div>
-                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Saved Assessment Profile</label>
-                <select id="cfg-saved-tests" onchange="loadTestFromSelector(this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                  <!-- Dynamic test list -->
-                </select>
-              </div>
-              <div class="border-t border-slate-700/50 pt-4">
-                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Subject / Test Name</label>
-                <input type="text" id="cfg-test-name" value="Mathematics Midterm" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-              </div>
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Questions Count</label>
-                  <select id="cfg-questions-count" onchange="updateQuestionCount(this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm">
-                    <option value="10">10 Items</option>
-                    <option value="20">20 Items</option>
-                    <option value="30">30 Items</option>
-                    <option value="40">40 Items</option>
-                    <option value="50" selected>50 Items</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Options/Choice</label>
-                  <select id="cfg-options-count" onchange="updateOptionsCount(this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm">
-                    <option value="4" selected>4 (A, B, C, D)</option>
-                    <option value="5">5 (A, B, C, D, E)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pt-4 border-t border-slate-700/60 space-y-2">
-            <button onclick="saveTestProfile()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl transition text-sm flex items-center justify-center gap-2 shadow-md">
-              💾 Save Test Config
-            </button>
-            <div class="flex gap-2">
-              <button onclick="clearAnswerKey()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 rounded-xl transition text-xs">
-                🧹 Clear Key
-              </button>
-              <button onclick="deleteActiveTestProfile()" class="flex-1 bg-rose-950/60 border border-rose-500/30 hover:bg-rose-900/45 text-rose-300 font-medium py-2 rounded-xl transition text-xs">
-                🗑️ Delete Profile
-              </button>
-            </div>
-            <button onclick="createNewTestProfile()" class="w-full bg-slate-950/40 border border-dashed border-slate-700 hover:border-slate-500 text-slate-400 hover:text-slate-200 py-2 rounded-xl text-xs transition">
-              ➕ Create New Blank Test
-            </button>
-          </div>
-        </div>
-
-        <!-- Key Selection Grid -->
-        <div class="lg:col-span-2 bg-slate-800/85 border border-slate-700/60 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
-          <div>
-            <div class="flex justify-between items-center mb-6">
-              <div>
-                <h2 class="text-lg font-bold text-white">Define Answer Key</h2>
-                <p class="text-xs text-slate-400 font-medium">Define answers manually or scan a blackened key sheet below.</p>
-              </div>
-              <div class="bg-indigo-950 border border-indigo-500/30 text-indigo-300 px-3 py-1.5 rounded-lg text-xs font-semibold">
-                <span id="key-assigned-badge">0 / 50</span> Keyed
-              </div>
-            </div>
-
-            <!-- Dynamic Key Selection Grid Container -->
-            <div id="key-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 max-h-[460px] overflow-y-auto pr-2 custom-scrollbar">
-              <!-- Dynamically injected rows -->
-            </div>
-          </div>
-
-          <!-- Fast Scan Hook -->
-          <div class="mt-6 pt-4 border-t border-slate-700/50 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-900/40 p-4 rounded-xl border border-slate-700/20">
-            <div class="text-center sm:text-left">
-              <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-widest">⚡ Scan Key Feature</h4>
-              <p class="text-[11px] text-slate-400 mt-0.5">Quickly import keys by scanning an answer sheet marked with the correct key structure.</p>
-            </div>
-            <button onclick="switchTabAndSetKeyScan()" class="bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 text-indigo-300 font-bold text-xs py-2 px-4 rounded-lg transition">
-              Scan Key Sheet Now
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 2: SHEET GENERATOR -->
-    <section id="tab-sheet" class="tab-content hidden space-y-6">
-      <div class="bg-slate-800/85 border border-slate-700/60 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row gap-6 items-center justify-between">
-        <div class="space-y-1 col-span-2">
-          <h2 class="text-lg font-bold text-white">Generate Custom Printable Sheet</h2>
-          <p class="text-xs text-slate-400 font-medium">Clean, ultra-compact design. Easily distribute sheet visually or hand out printed copies.</p>
-        </div>
-        <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-          <button onclick="downloadSheetAsPNG()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition duration-150">
-            🖼️ Download as PNG
-          </button>
-          <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition duration-150">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-3a2 2 0 00-2-2H9a2 2 0 00-2 2v3a2 2 0 002 2zm0-9V9a4 4 0 014-4h4a4 4 0 014 4v2"></path>
-            </svg>
-            Print Sheet (A4 PDF)
-          </button>
-        </div>
-      </div>
-
-      <!-- Live Sheet Preview inside App -->
-      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 md:p-8 max-w-2xl mx-auto shadow-2xl relative overflow-hidden">
-        <div id="inner-preview-container" class="bg-white p-2 text-slate-950 rounded">
-          <!-- The printable sheet logic renders here dynamically -->
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 3: LIVE CAMERA SCANNER -->
-    <section id="tab-scan" class="tab-content hidden space-y-6">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <!-- Live Camera Viewfinder -->
-        <div class="lg:col-span-2 flex flex-col space-y-4">
-          <div class="bg-slate-800/85 border border-slate-700/60 rounded-2xl p-4 shadow-xl relative overflow-hidden flex flex-col justify-between">
-            <div class="flex justify-between items-center mb-3">
-              <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
-                <span class="text-sm font-semibold text-white">Live Scanner Cam</span>
-              </div>
-              <div class="flex items-center gap-3">
-                <!-- Scan mode switcher -->
-                <div class="bg-slate-950 p-1 rounded-lg border border-slate-700/50 flex">
-                  <button id="scan-mode-student" onclick="setScanMode('student')" class="px-2.5 py-1 text-[10px] font-bold rounded bg-indigo-600 text-white transition-all">
-                    Student Sheet
-                  </button>
-                  <button id="scan-mode-key" onclick="setScanMode('key')" class="px-2.5 py-1 text-[10px] font-bold rounded text-slate-400 hover:text-white transition-all">
-                    Answer Key
-                  </button>
-                </div>
-                <select id="camera-select" onchange="startScanner()" class="bg-slate-900 border border-slate-700 rounded-lg text-[11px] text-slate-200 px-2 py-1 max-w-[150px] focus:outline-none">
-                  <!-- Dynamic Cameras -->
-                </select>
-              </div>
-            </div>
-
-            <!-- Viewport Container -->
-            <div class="relative aspect-[3/4] max-w-md mx-auto w-full bg-black rounded-xl overflow-hidden border-2 border-indigo-500/20 shadow-inner">
-              <video id="webcam-stream" class="absolute inset-0 w-full h-full object-cover" autoplay playsinline muted></video>
-              
-              <!-- Scan Assist Overlay -->
-              <div class="absolute inset-0 flex flex-col justify-between pointer-events-none p-6">
-                <!-- Top Corner Alignment brackets -->
-                <div class="flex justify-between">
-                  <div class="w-12 h-12 border-t-4 border-l-4 border-indigo-400 rounded-tl-lg shadow-glow"></div>
-                  <div class="w-12 h-12 border-t-4 border-r-4 border-indigo-400 rounded-tr-lg shadow-glow"></div>
+<body class="h-full text-slate-800 dark:text-slate-100 transition-colors duration-200">
+    <!-- Main Layout Container -->
+    <div class="min-h-full flex flex-col">
+        <!-- Top Navigation Header -->
+        <header class="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+            <div class="max-w-7xl mx-auto flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-brand-600 p-2 rounded-xl text-white shadow-md shadow-brand-500/20">
+                        <i data-lucide="scan-line" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold tracking-tight">MarkFlow AI</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Handwritten Assignment Grading Companion</p>
+                    </div>
                 </div>
                 
-                <!-- Helpful alignment banner -->
-                <div class="self-center bg-indigo-950/95 border border-indigo-400/50 text-indigo-300 px-4 py-2 rounded-xl text-center text-xs backdrop-blur-md shadow-lg max-w-[85%]">
-                  ✨ Align the <span class="font-bold text-white">4 corner squares</span> within brackets.
-                  <span id="scan-target-mode-label" class="block font-black text-emerald-400 uppercase text-[10px] tracking-wider mt-1">MODE: Student sheet grading</span>
-                </div>
-
-                <!-- Bottom Corner Alignment brackets -->
-                <div class="flex justify-between">
-                  <div class="w-12 h-12 border-b-4 border-l-4 border-indigo-400 rounded-bl-lg shadow-glow"></div>
-                  <div class="w-12 h-12 border-b-4 border-r-4 border-indigo-400 rounded-br-lg shadow-glow"></div>
-                </div>
-              </div>
-
-              <!-- Processing indicator / overlay when a successful scan happens -->
-              <div id="scanner-flash" class="absolute inset-0 bg-white opacity-0 transition-opacity duration-150 pointer-events-none z-10 flex items-center justify-center">
-                <span id="flash-text" class="text-2xl font-black text-indigo-900">SCANNED!</span>
-              </div>
-            </div>
-
-            <div class="mt-4 flex gap-3">
-              <button onclick="triggerImmediateScan()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-semibold py-3 px-6 rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
-                📸 Capture & Grade Sheet
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Grade Card Results Column -->
-        <div class="flex flex-col space-y-6">
-          <div class="bg-slate-800/85 border border-slate-700/60 rounded-2xl p-6 shadow-xl flex-grow flex flex-col justify-between">
-            <div>
-              <h2 class="text-lg font-bold text-white mb-2">Live Grading Desk</h2>
-              <p class="text-xs text-slate-400 mb-6">Real-time stats of the current scan.</p>
-              
-              <!-- Calibration Success / Warning State Indicator -->
-              <div id="calibration-status" class="mb-4 bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-3">
-                <div class="w-3.5 h-3.5 bg-yellow-500 rounded-full flex items-center justify-center text-[8px] font-black text-slate-950">!</div>
-                <div>
-                  <h4 class="text-xs font-semibold text-slate-200">Awaiting Alignment</h4>
-                  <p class="text-[10px] text-slate-400 font-medium">Align the page within camera boundaries.</p>
-                </div>
-              </div>
-
-              <!-- Live Grades Output -->
-              <div id="grade-result-card" class="hidden space-y-4">
-                
-                <!-- Circular Score Display -->
-                <div class="flex items-center gap-5 bg-slate-900/60 p-4 rounded-2xl border border-slate-700/50">
-                  <div class="relative w-20 h-20 flex items-center justify-center bg-indigo-950 rounded-full border-4 border-indigo-500 shadow-lg">
-                    <span id="scan-pct" class="text-xl font-black text-white">0%</span>
-                  </div>
-                  <div>
-                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Student Score</h3>
-                    <p id="scan-score-fraction" class="text-xl font-bold text-white">-- / --</p>
-                    <span id="scan-badge" class="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">PASSED</span>
-                  </div>
-                </div>
-
-                <!-- Handwriting AI Extraction Zone -->
-                <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-3">
-                  <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider">AI Student Capture</span>
-                    <button id="instant-ocr-btn" onclick="triggerInstantOCR()" class="text-[10px] bg-indigo-600/30 hover:bg-indigo-600/60 text-indigo-300 border border-indigo-500/40 px-2 py-1 rounded transition">
-                      🔍 Instant AI OCR
+                <div class="flex items-center space-x-2">
+                    <!-- Theme Toggle -->
+                    <button id="themeToggleBtn" class="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" title="Toggle Theme">
+                        <i data-lucide="sun" id="sunIcon" class="w-5 h-5 hidden"></i>
+                        <i data-lucide="moon" id="moonIcon" class="w-5 h-5"></i>
                     </button>
-                  </div>
+                    <!-- Settings Button -->
+                    <button id="openSettingsBtn" class="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition">
+                        <i data-lucide="key" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">API Setup</span>
+                    </button>
+                </div>
+            </div>
+        </header>
 
-                  <!-- Cropped Handwriting Preview -->
-                  <div class="bg-slate-950 p-2 rounded-lg border border-slate-800 flex flex-col items-center">
-                    <span class="text-[9px] text-slate-500 uppercase tracking-wider mb-1">Cropped Name Field</span>
-                    <img id="scan-crop-preview" class="max-h-[50px] w-auto border border-slate-700 rounded bg-white hidden" alt="Cropped Student Info" />
-                  </div>
-
-                  <div class="space-y-2 text-xs">
-                    <div class="flex justify-between items-center">
-                      <span class="text-slate-400">Name:</span>
-                      <input type="text" id="scan-student-name" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-right w-2/3 focus:outline-none focus:border-indigo-500">
+        <!-- Main Workspace -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Panel: Configuration & Capture (5 Columns) -->
+            <div class="lg:col-span-5 space-y-6">
+                <!-- Step 1: Document Details & Custom Rubric -->
+                <section class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 shadow-sm">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-300 text-xs font-bold">1</span>
+                        <h2 class="text-base font-semibold">Configure Assignment</h2>
                     </div>
-                    <div class="flex justify-between items-center">
-                      <span class="text-slate-400">Section:</span>
-                      <input type="text" id="scan-student-section" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-right w-2/3 focus:outline-none focus:border-indigo-500">
+
+                    <div class="space-y-4">
+                        <!-- Category Picker -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Assignment Category</label>
+                            <select id="assignmentCategory" class="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition">
+                                <option value="poem">Poem / Creative Poetry</option>
+                                <option value="essay" selected>Analytical Essay</option>
+                                <option value="journal">Personal Journal / Reflection</option>
+                                <option value="story">Short Story / Fiction</option>
+                                <option value="scientific">Scientific Report / Lab Write-up</option>
+                            </select>
+                        </div>
+
+                        <!-- Class & Assignment Names -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Class Code</label>
+                                <input type="text" id="classCode" placeholder="e.g. ENG-101" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm focus:outline-none focus:border-brand-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Student Name</label>
+                                <input type="text" id="studentName" placeholder="e.g. Alex Johnson" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-sm focus:outline-none focus:border-brand-500">
+                            </div>
+                        </div>
+
+                        <!-- Rubric Section -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Dynamic Rubrics</label>
+                                <button id="addRubricBtn" class="text-xs text-brand-600 dark:text-brand-400 hover:underline flex items-center space-x-1 font-medium">
+                                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> <span>Add Criteria</span>
+                                </button>
+                            </div>
+                            
+                            <!-- Dynamic Rubric Items Container -->
+                            <div id="rubricsContainer" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                                <!-- Dynamic entries go here -->
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex justify-between items-center">
-                      <span class="text-slate-400">Subject:</span>
-                      <input type="text" id="scan-student-subject" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-right w-2/3 focus:outline-none focus:border-indigo-500">
+                </section>
+
+                <!-- Step 2: OCR Scanner Hub -->
+                <section class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-2">
+                            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900 text-brand-600 dark:text-brand-300 text-xs font-bold">2</span>
+                            <h2 class="text-base font-semibold">Upload or Snap Image</h2>
+                        </div>
+                        <span id="scanModeBadge" class="px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400 rounded-md">Camera Ready</span>
                     </div>
-                  </div>
-                  <div class="text-[10px] text-slate-500 leading-relaxed text-center">
-                    💡 <span class="text-indigo-400 font-medium">Offline Active:</span> Scan and save rapidly without internet. You can sync names with AI OCR from the Gradebook once connected!
-                  </div>
+
+                    <!-- Scan / Upload Core -->
+                    <div class="space-y-4">
+                        <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-brand-500 dark:hover:border-brand-400 rounded-2xl p-6 text-center cursor-pointer relative bg-slate-50 dark:bg-slate-900/40 transition group" id="dropZone">
+                            <input type="file" id="fileInput" accept="image/*" capture="environment" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                            
+                            <div id="uploadPrompt" class="space-y-3 pointer-events-none">
+                                <div class="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:scale-110 transition duration-200">
+                                    <i data-lucide="camera" class="w-6 h-6"></i>
+                                </div>
+                                <div class="text-sm">
+                                    <span class="font-semibold text-brand-600 dark:text-brand-400 hover:underline">Tap to snap / upload</span> or drag and drop
+                                </div>
+                                <p class="text-xs text-slate-400">High-resolution JPG or PNG works best</p>
+                            </div>
+
+                            <!-- Image Preview Frame -->
+                            <div id="imagePreviewContainer" class="hidden w-full relative z-20">
+                                <img id="imagePreview" class="max-h-64 mx-auto rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 object-contain" src="#" alt="Student paper scan">
+                                <button id="removeImageBtn" type="button" class="absolute top-2 right-2 bg-rose-600 hover:bg-rose-700 text-white p-1.5 rounded-full shadow transition" title="Clear image">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Scan Action -->
+                        <button id="runAnalysisBtn" disabled class="w-full py-3 px-4 rounded-xl font-semibold text-sm shadow-lg shadow-brand-500/20 bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50 disabled:pointer-events-none transition flex items-center justify-center space-x-2">
+                            <i data-lucide="wand-2" class="w-4 h-4"></i>
+                            <span>Grade & Analyze with Gemini</span>
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Panel: Grading Report Panel (7 Columns) -->
+            <div class="lg:col-span-7">
+                <!-- Welcome/Placeholder Panel -->
+                <div id="resultsPlaceholder" class="h-full flex flex-col items-center justify-center text-center p-8 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm min-h-[400px]">
+                    <div class="w-16 h-16 bg-slate-100 dark:bg-slate-900 rounded-2xl flex items-center justify-center text-slate-400 mb-4 animate-bounce">
+                        <i data-lucide="sparkles" class="w-8 h-8"></i>
+                    </div>
+                    <h3 class="text-lg font-bold">Your Grading Dashboard</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mt-2">
+                        Set up your rubrics, capture/upload your student's written assignment, and trigger the AI evaluation to receive real-time, comprehensive reports.
+                    </p>
+                    <button id="loadDemoBtn" class="mt-4 px-4 py-2 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition">
+                        Load Demo Evaluation
+                    </button>
                 </div>
 
-                <!-- Analysis Summary Itemized -->
-                <div class="space-y-2">
-                  <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Answer Mapping</h4>
-                  <div id="scan-details-list" class="grid grid-cols-5 gap-1 max-h-[140px] overflow-y-auto pr-2 custom-scrollbar">
-                    <!-- Dynamic mini items -->
-                  </div>
+                <!-- Live Loader -->
+                <div id="resultsLoader" class="hidden h-full flex-col items-center justify-center text-center p-8 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm min-h-[400px]">
+                    <div class="relative w-16 h-16 mb-4">
+                        <div class="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-700"></div>
+                        <div class="absolute inset-0 rounded-full border-4 border-brand-600 border-t-transparent animate-spin"></div>
+                    </div>
+                    <h3 class="text-lg font-bold animate-pulse">Analyzing Handwriting...</h3>
+                    <p id="loaderMessage" class="text-xs text-slate-400 mt-2 max-w-md">Scanning original ink structures, parsing subjective logic, and validating criteria scores.</p>
                 </div>
-              </div>
 
-              <!-- Answer Key Scan Output (Temporary View) -->
-              <div id="key-result-card" class="hidden space-y-4">
-                <div class="p-4 bg-emerald-950/40 border border-emerald-500/20 rounded-xl">
-                  <h3 class="text-sm font-bold text-emerald-400">✓ Key Sheet Resolved</h3>
-                  <p class="text-xs text-slate-300 mt-1">Successfully read darkened key combinations from the sheet layout. Ready to save below.</p>
+                <!-- Analysis Results Dashboard -->
+                <div id="resultsDashboard" class="hidden space-y-6">
+                    <!-- Core Summary Header Card -->
+                    <section class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-6 shadow-sm">
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700" id="reportAssignmentMeta">ESSAY - ENG-101</span>
+                                <h2 class="text-2xl font-black mt-2" id="reportStudentName">Alex Johnson</h2>
+                                <p class="text-xs text-slate-400 mt-1" id="reportDate">Graded just now</p>
+                            </div>
+                            
+                            <!-- Overall Score Badge -->
+                            <div class="text-center bg-brand-50 dark:bg-brand-950/40 border border-brand-100 dark:border-brand-900 p-4 rounded-2xl min-w-[100px] shadow-sm">
+                                <span class="block text-xs uppercase font-bold tracking-wider text-brand-600 dark:text-brand-400">Total Score</span>
+                                <div class="mt-1 flex items-baseline justify-center">
+                                    <span class="text-3xl font-extrabold" id="reportOverallScore">84</span>
+                                    <span class="text-slate-400 font-medium text-sm" id="reportMaxScore">/100</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AI Plagiarism Indicator / Info Panel -->
+                        <div class="mt-6 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex items-start space-x-3">
+                                <div class="bg-indigo-100 dark:bg-indigo-950/60 p-2 rounded-lg text-indigo-600 dark:text-indigo-400 shrink-0">
+                                    <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold">AI Probability Score</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" id="aiProbabilityExplanation">Analysis on vocabulary patterns and stylistic flow.</p>
+                                    <div class="mt-2 flex items-center space-x-2">
+                                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden max-w-[120px]">
+                                            <div id="aiProbabilityBar" class="bg-indigo-600 h-1.5" style="width: 15%"></div>
+                                        </div>
+                                        <span class="text-xs font-bold" id="aiProbabilityBadge">15%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start space-x-3">
+                                <div class="bg-emerald-100 dark:bg-emerald-950/60 p-2 rounded-lg text-emerald-600 dark:text-emerald-400 shrink-0">
+                                    <i data-lucide="thumbs-up" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold">Overall Impression</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed mt-0.5" id="overallFeedbackText">Evaluating general style coherence and structured thoughts.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Score Breakdown Breakdown -->
+                    <section class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-6 shadow-sm">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Rubric Assessment</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="scoreBreakdownGrid">
+                            <!-- Dynamic scorecard items populate here -->
+                        </div>
+                    </section>
+
+                    <!-- Interactive Scan Transcripts with inline marks -->
+                    <section class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 overflow-hidden shadow-sm">
+                        <div class="border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Extracted OCR Transcription</h3>
+                            <span class="text-xs text-slate-500 flex items-center space-x-1">
+                                <i data-lucide="info" class="w-3.5 h-3.5 text-brand-500"></i>
+                                <span>Click highlighted spans for guidance</span>
+                            </span>
+                        </div>
+                        
+                        <div class="p-6">
+                            <!-- Highlighting sandbox display -->
+                            <div class="prose dark:prose-invert max-w-none text-base leading-relaxed tracking-wide font-serif bg-slate-50/50 dark:bg-slate-900/30 p-6 rounded-xl border border-slate-100 dark:border-slate-800 min-h-[120px]" id="extractedTextBody">
+                                <!-- Re-constructed text with span marks -->
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Focused Annotations / Suggestions -->
+                    <section class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-6 shadow-sm">
+                        <div class="flex items-center space-x-2 mb-4">
+                            <i data-lucide="message-square-text" class="w-5 h-5 text-brand-600 dark:text-brand-400"></i>
+                            <h3 class="text-base font-bold">Actionable Highlights & Suggestions</h3>
+                        </div>
+                        <div class="space-y-3" id="annotationsList">
+                            <!-- List of individual correction blocks -->
+                        </div>
+                    </section>
                 </div>
-                <div class="space-y-2">
-                  <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Identified Key Answers</h4>
-                  <div id="key-scanned-details" class="grid grid-cols-5 gap-1.5 max-h-[180px] overflow-y-auto pr-2 custom-scrollbar text-xs">
-                    <!-- Dynamic read bubbles -->
-                  </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- API Setup Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md border border-slate-200 dark:border-slate-700 shadow-2xl p-6 relative">
+            <button id="closeSettingsBtn" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-300 p-2.5 rounded-xl">
+                    <i data-lucide="settings" class="w-6 h-6"></i>
                 </div>
-                <button onclick="commitScannedKeyToTest()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl transition text-sm">
-                  Apply Scanned Key to This Test
+                <div>
+                    <h3 class="text-lg font-bold">API Configuration</h3>
+                    <p class="text-xs text-slate-500">Your credentials remain secure in local browser storage.</p>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Gemini API Key</label>
+                    <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                    <div class="mt-2 flex items-center justify-between">
+                        <p class="text-xs text-slate-400">Required to grade scans live.</p>
+                        <a href="https://aistudio.google.com/" target="_blank" class="text-xs text-brand-600 dark:text-brand-400 hover:underline flex items-center space-x-0.5">
+                            <span>Get free key</span>
+                            <i data-lucide="external-link" class="w-3 h-3"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 flex items-start space-x-2.5">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"></i>
+                    <p class="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                        <strong>Security Note:</strong> Your API key is only processed client-side. It is sent directly to Google Gemini APIs and is never shared with external servers.
+                    </p>
+                </div>
+
+                <button id="saveSettingsBtn" class="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition">
+                    Save Key
                 </button>
-              </div>
-
-              <!-- Placeholder state -->
-              <div id="scanner-placeholder" class="text-center py-16 px-4">
-                <div class="w-16 h-16 bg-slate-700/40 border border-slate-600/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-500">
-                  <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                  </svg>
-                </div>
-                <p class="text-sm font-medium text-slate-400">No scanned sheet yet</p>
-                <p class="text-xs text-slate-500 mt-1">Hold the printable sheet layout steady inside camera frame, then trigger scan.</p>
-              </div>
-
             </div>
+        </div>
+    </div>
 
-            <!-- Save Result button -->
-            <button id="save-scan-btn" onclick="saveCurrentScan()" class="hidden w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition shadow-lg shadow-emerald-600/10 mt-6 flex items-center justify-center gap-2">
-              📥 Save to Gradebook
+    <!-- Popover Card for inline annotation clicks -->
+    <div id="annotationPopover" class="fixed z-50 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 max-w-sm hidden">
+        <div class="flex items-center justify-between mb-2">
+            <span id="popoverBadge" class="px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide">Spelling</span>
+            <button id="closePopoverBtn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <i data-lucide="x" class="w-4 h-4"></i>
             </button>
-          </div>
         </div>
-
-      </div>
-    </section>
-
-    <!-- TAB 4: HISTORY AND RESULTS -->
-    <section id="tab-history" class="tab-content hidden space-y-6">
-      
-      <!-- Offline Sync Banner -->
-      <div id="sync-banner" class="hidden bg-indigo-950/80 border-2 border-indigo-500/30 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 shadow-xl">
-        <div class="flex items-center gap-3">
-          <div class="bg-indigo-600/20 text-indigo-400 p-2.5 rounded-xl">
-            <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.253 8H18"></path>
-            </svg>
-          </div>
-          <div>
-            <h3 class="text-sm font-bold text-white">Pending OCR Sync Required</h3>
-            <p class="text-xs text-slate-400 font-medium">There are <span id="pending-sync-count" class="text-indigo-400 font-bold">0</span> scans graded offline waiting to resolve student identities via AI OCR.</p>
-          </div>
-        </div>
-        <button id="bulk-sync-btn" onclick="startBulkOCRSync()" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs py-2.5 px-5 rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2">
-          ✨ Sync Pending OCR Now
-        </button>
-      </div>
-
-      <!-- Top Overview Stats -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-slate-800/85 border border-slate-700/60 p-5 rounded-2xl shadow-md">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Graded Students</span>
-          <p id="stat-total-students" class="text-3xl font-black text-white mt-1">0</p>
-        </div>
-        <div class="bg-slate-800/85 border border-slate-700/60 p-5 rounded-2xl shadow-md">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Class Average</span>
-          <p id="stat-class-average" class="text-3xl font-black text-indigo-400 mt-1">0%</p>
-        </div>
-        <div class="bg-slate-800/85 border border-slate-700/60 p-5 rounded-2xl shadow-md">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Highest Score</span>
-          <p id="stat-highest-score" class="text-3xl font-black text-emerald-400 mt-1">--</p>
-        </div>
-        <div class="bg-slate-800/85 border border-slate-700/60 p-5 rounded-2xl shadow-md">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Lowest Score</span>
-          <p id="stat-lowest-score" class="text-3xl font-black text-rose-400 mt-1">--</p>
-        </div>
-      </div>
-
-      <!-- Main History table -->
-      <div class="bg-slate-800/85 border border-slate-700/60 rounded-2xl p-6 shadow-xl">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h2 class="text-lg font-bold text-white">Local Gradebook History</h2>
-            <p class="text-xs text-slate-400">Offline persistent records managed by IndexedDB (Dexie)</p>
-          </div>
-          <div class="flex gap-2 w-full sm:w-auto">
-            <button onclick="exportGradebookToCSV()" class="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold py-2 px-4 rounded-xl transition">
-              📤 Export CSV
-            </button>
-            <button onclick="clearGradebook()" class="flex-1 sm:flex-none bg-slate-950 border border-slate-700 hover:border-red-500 hover:text-red-400 text-slate-400 text-xs font-semibold py-2 px-4 rounded-xl transition">
-              🗑️ Clear Database Log
-            </button>
-          </div>
-        </div>
-
-        <div class="overflow-x-auto rounded-xl border border-slate-700/50">
-          <table class="w-full text-left border-collapse text-xs md:text-sm">
-            <thead>
-              <tr class="bg-slate-900 border-b border-slate-700/50 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                <th class="py-3 px-4">Student Name</th>
-                <th class="py-3 px-4">Section / Subject</th>
-                <th class="py-3 px-4 text-center">Score Ratio</th>
-                <th class="py-3 px-4 text-center">Percentage</th>
-                <th class="py-3 px-4">Timestamp</th>
-                <th class="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="history-table-body" class="divide-y divide-slate-700/40 text-slate-200">
-              <!-- Dynamically populated grades rows will inject here -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Item Analysis Breakdown -->
-      <div class="bg-slate-800/85 border border-slate-700/60 rounded-2xl p-6 shadow-xl">
-        <h2 class="text-lg font-bold text-white mb-2">Item Difficulty Analysis</h2>
-        <p class="text-xs text-slate-400 mb-6">Visual breakdown of question missed ratios across your database records.</p>
-        
-        <div id="item-analysis-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <!-- Dynamic bars showing difficulty ratio per question -->
-        </div>
-      </div>
-
-    </section>
-
-  </main>
-
-  <!-- Printable Container - Formatted cleanly outside normal body flow -->
-  <div id="printable-area" class="hidden"></div>
-
-  <!-- Footer -->
-  <footer class="bg-slate-950 py-4 px-6 text-center text-xs text-slate-500 border-t border-slate-800 mt-auto no-print">
-    <p>OpenGrade Pro runs completely client-side. Dexie IndexedDB secures metadata locally inside sandbox context.</p>
-  </footer>
-
-  <!-- Invisible canvases used for frame calibration & calculations -->
-  <canvas id="calc-canvas" class="hidden" width="600" height="800"></canvas>
-  <canvas id="gray-canvas" class="hidden" width="600" height="800"></canvas>
-
-  <script>
-    /* =========================================================================
-       DEXIE LOCAL DATABASE INITIALIZATION
-       ========================================================================= */
-    const db = new Dexie("OpenGradeDB");
-    db.version(1).stores({
-      tests: 'id, name, numQuestions, optionsPerQuestion, answerKey',
-      grades: 'id, testId, studentName, section, subject, score, total, pct, timestamp, answers, headerImage, needsSync'
-    });
-
-    /* =========================================================================
-       GLOBAL APP STATE
-       ========================================================================= */
-    const state = {
-      activeTestId: "default-test",
-      testName: "Mathematics Midterm",
-      numQuestions: 50,
-      optionsPerQuestion: 4, 
-      answerKey: {}, // index (0-based) -> correct option letter (A, B, C, D)
-      gradebook: [],
-      currentScan: null, 
-      scannedAnswerKey: null, // Temporary store of scanned answer keys
-      videoStream: null,
-      activeTab: "tab-key",
-      isScanningActive: false,
-      scanMode: "student" // "student" or "key"
-    };
-
-    // Pre-initialize basic key state
-    for(let i = 0; i < state.numQuestions; i++) {
-      state.answerKey[i] = 'A';
-    }
-
-    const apiKey = ""; // Will be populated by runtime environment
-
-    /* =========================================================================
-       APP INITIALIZATION & PERSISTENCE LOAD
-       ========================================================================= */
-    window.addEventListener('DOMContentLoaded', async () => {
-      await initializeDatabaseDefaults();
-      await loadSavedTestsDropdown();
-      await selectActiveTest("default-test");
-      await loadGradebookFromDB();
-      renderKeyGrid();
-      updateKeyCountBadge();
-    });
-
-    async function initializeDatabaseDefaults() {
-      const defaultTest = await db.tests.get("default-test");
-      if (!defaultTest) {
-        // Populate default test
-        const initialKey = {};
-        for (let i = 0; i < 50; i++) {
-          initialKey[i] = String.fromCharCode(65 + (i % 4)); // A, B, C, D alternating
-        }
-        await db.tests.put({
-          id: "default-test",
-          name: "Mathematics Midterm",
-          numQuestions: 50,
-          optionsPerQuestion: 4,
-          answerKey: initialKey
-        });
-      }
-    }
-
-    async function loadSavedTestsDropdown() {
-      const tests = await db.tests.toArray();
-      const select = document.getElementById('cfg-saved-tests');
-      select.innerHTML = '';
-      tests.forEach(test => {
-        const option = document.createElement('option');
-        option.value = test.id;
-        option.text = `${test.name} (${test.numQuestions} items)`;
-        if (test.id === state.activeTestId) {
-          option.selected = true;
-        }
-        select.appendChild(option);
-      });
-    }
-
-    async function selectActiveTest(id) {
-      const test = await db.tests.get(id);
-      if (test) {
-        state.activeTestId = test.id;
-        state.testName = test.name;
-        state.numQuestions = test.numQuestions;
-        state.optionsPerQuestion = test.optionsPerQuestion;
-        state.answerKey = test.answerKey;
-
-        // Synchronize layout configuration fields
-        document.getElementById('cfg-test-name').value = test.name;
-        document.getElementById('cfg-questions-count').value = test.numQuestions;
-        document.getElementById('cfg-options-count').value = test.optionsPerQuestion;
-
-        renderKeyGrid();
-        updateKeyCountBadge();
-      }
-    }
-
-    async function loadTestFromSelector(id) {
-      await selectActiveTest(id);
-      showToast("✓ Assessment Profile loaded.");
-    }
-
-    async function createNewTestProfile() {
-      const newId = "test-" + Date.now();
-      const initialKey = {};
-      for (let i = 0; i < 50; i++) {
-        initialKey[i] = 'A';
-      }
-      const newProfile = {
-        id: newId,
-        name: "New Blank Assessment " + (await db.tests.count() + 1),
-        numQuestions: 50,
-        optionsPerQuestion: 4,
-        answerKey: initialKey
-      };
-      await db.tests.put(newProfile);
-      await loadSavedTestsDropdown();
-      await selectActiveTest(newId);
-      showToast("➕ New profile created.");
-    }
-
-    async function saveTestProfile() {
-      const name = document.getElementById('cfg-test-name').value || "Unnamed Assessment";
-      const profile = {
-        id: state.activeTestId,
-        name: name,
-        numQuestions: state.numQuestions,
-        optionsPerQuestion: state.optionsPerQuestion,
-        answerKey: state.answerKey
-      };
-      await db.tests.put(profile);
-      state.testName = name;
-      await loadSavedTestsDropdown();
-      showToast("✓ Saved configurations successfully.");
-    }
-
-    async function deleteActiveTestProfile() {
-      if (state.activeTestId === 'default-test') {
-        showToast("⚠️ Cannot delete the main default profile.");
-        return;
-      }
-      if (confirm(`Are you sure you want to permanently delete "${state.testName}" and all its graded history?`)) {
-        await db.tests.delete(state.activeTestId);
-        await db.grades.where('testId').equals(state.activeTestId).delete();
-        showToast("🗑️ Profile and grades cleared.");
-        await loadSavedTestsDropdown();
-        await selectActiveTest("default-test");
-      }
-    }
-
-    async function loadGradebookFromDB() {
-      const records = await db.grades.where('testId').equals(state.activeTestId).toArray();
-      state.gradebook = records;
-    }
-
-    /* =========================================================================
-       PAGE ROUTING / TABS
-       ========================================================================= */
-    function switchTab(tabId) {
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('block'));
-      
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
-        btn.classList.add('text-slate-400', 'hover:text-white');
-      });
-
-      const target = document.getElementById(tabId);
-      target.classList.remove('hidden');
-      target.classList.add('block');
-
-      const activeBtn = document.getElementById(`btn-${tabId}`);
-      activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
-      activeBtn.classList.remove('text-slate-400', 'hover:text-white');
-
-      state.activeTab = tabId;
-
-      if (tabId === 'tab-sheet') {
-        stopScanner();
-        renderAnswerSheetTemplates();
-      } else if (tabId === 'tab-scan') {
-        startScanner();
-      } else {
-        stopScanner();
-      }
-
-      if (tabId === 'tab-history') {
-        loadGradebookFromDB().then(() => renderGradebook());
-      }
-    }
-
-    function switchTabAndSetKeyScan() {
-      setScanMode('key');
-      switchTab('tab-scan');
-    }
-
-    /* =========================================================================
-       TAB 1: INTERACTIVE KEY CREATION LOGIC
-       ========================================================================= */
-    function updateQuestionCount(val) {
-      const count = parseInt(val);
-      const prevCount = state.numQuestions;
-      state.numQuestions = count;
-      
-      for(let i = 0; i < count; i++) {
-        if (!state.answerKey[i]) {
-          state.answerKey[i] = 'A';
-        }
-      }
-      for(let i = count; i < prevCount; i++) {
-        delete state.answerKey[i];
-      }
-      
-      renderKeyGrid();
-      updateKeyCountBadge();
-    }
-
-    function updateOptionsCount(val) {
-      state.optionsPerQuestion = parseInt(val);
-      
-      for(let i = 0; i < state.numQuestions; i++) {
-        const optionLimitCode = 65 + state.optionsPerQuestion;
-        const currentCode = state.answerKey[i].charCodeAt(0);
-        if (currentCode >= optionLimitCode) {
-          state.answerKey[i] = 'A';
-        }
-      }
-      renderKeyGrid();
-    }
-
-    function selectKeyBubble(qIndex, bubbleChar) {
-      state.answerKey[qIndex] = bubbleChar;
-      
-      document.querySelectorAll(`.key-row-${qIndex} .bubble`).forEach(b => {
-        b.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-600');
-        b.classList.add('bg-slate-900', 'text-slate-400', 'border-slate-700', 'hover:border-slate-500');
-      });
-      
-      const selectedBubble = document.getElementById(`bubble-key-${qIndex}-${bubbleChar}`);
-      if (selectedBubble) {
-        selectedBubble.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600');
-        selectedBubble.classList.remove('bg-slate-900', 'text-slate-400', 'border-slate-700', 'hover:border-slate-500');
-      }
-
-      updateKeyCountBadge();
-    }
-
-    function updateKeyCountBadge() {
-      const activeCount = Object.keys(state.answerKey).length;
-      document.getElementById('key-assigned-badge').innerText = `${activeCount} / ${state.numQuestions}`;
-    }
-
-    function renderKeyGrid() {
-      const grid = document.getElementById('key-grid');
-      grid.innerHTML = '';
-
-      for(let i = 0; i < state.numQuestions; i++) {
-        const row = document.createElement('div');
-        row.className = `key-row-${i} flex items-center justify-between p-2 rounded-xl bg-slate-900/40 border border-slate-700/30 hover:border-slate-700/60 transition`;
-        
-        let bubblesHTML = '';
-        const limit = state.optionsPerQuestion;
-        
-        for(let opt = 0; opt < limit; opt++) {
-          const letter = String.fromCharCode(65 + opt);
-          const isSelected = state.answerKey[i] === letter;
-          
-          bubblesHTML += `
-            <button id="bubble-key-${i}-${letter}" onclick="selectKeyBubble(${i}, '${letter}')" class="bubble w-7 h-7 rounded-full border text-[11px] font-semibold flex items-center justify-center transition-all duration-150 ${
-              isSelected 
-              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
-              : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
-            }">
-              ${letter}
-            </button>
-          `;
-        }
-
-        row.innerHTML = `
-          <div class="flex items-center gap-2">
-            <span class="mono text-[11px] font-bold text-slate-500 w-6">Q${i+1}</span>
-            <div class="flex gap-1">
-              ${bubblesHTML}
+        <div class="space-y-2">
+            <div>
+                <span class="text-xs text-slate-400 block font-medium">Original written</span>
+                <span id="popoverOriginal" class="text-sm font-serif line-through text-rose-500 dark:text-rose-400">text</span>
             </div>
-          </div>
-        `;
-        grid.appendChild(row);
-      }
-      updateKeyCountBadge();
-    }
-
-    /* =========================================================================
-       TAB 2: PRINTABLE ULTRA-COMPACT ANSWER SHEET GENERATOR
-       ========================================================================= */
-    function renderAnswerSheetTemplates() {
-      const testNameText = document.getElementById('cfg-test-name').value || "Mathematics Midterm";
-      state.testName = testNameText;
-
-      const layoutHTML = generateStandardSheetHTML(testNameText, state.numQuestions, state.optionsPerQuestion);
-      document.getElementById('inner-preview-container').innerHTML = layoutHTML;
-      document.getElementById('printable-area').innerHTML = layoutHTML;
-    }
-
-    function generateStandardSheetHTML(name, numQs, optsCount) {
-      const colsCount = 4;
-      const maxRowsPerCol = Math.ceil(numQs / colsCount);
-      let gridHTML = '<div class="grid grid-cols-4 gap-4 flex-grow">';
-
-      for (let col = 0; col < colsCount; col++) {
-        let colRowsHTML = '';
-        const startIdx = col * maxRowsPerCol;
-        const endIdx = Math.min(startIdx + maxRowsPerCol, numQs);
-
-        for (let i = startIdx; i < endIdx; i++) {
-          let optionsHTML = '';
-          for (let opt = 0; opt < optsCount; opt++) {
-            const letter = String.fromCharCode(65 + opt);
-            optionsHTML += `
-              <div class="sheet-bubble">
-                ${letter}
-              </div>
-            `;
-          }
-          colRowsHTML += `
-            <div class="flex items-center gap-2 py-1.5 border-b border-dashed border-slate-200">
-              <span class="font-bold text-slate-500 text-[10px] w-5 text-right">${i+1}.</span>
-              <div class="flex gap-1.5">
-                ${optionsHTML}
-              </div>
+            <div>
+                <span class="text-xs text-slate-400 block font-medium">Correction suggestion</span>
+                <span id="popoverCorrection" class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">text</span>
             </div>
-          `;
-        }
-
-        gridHTML += `
-          <div class="space-y-1">
-            <h4 class="text-[10px] font-bold text-slate-400 border-b pb-0.5 mb-1.5 uppercase tracking-widest text-center">Col ${col+1}</h4>
-            ${colRowsHTML || `<p class="text-[9px] text-slate-400 italic text-center">Empty</p>`}
-          </div>
-        `;
-      }
-      gridHTML += '</div>';
-
-      return `
-        <div id="target-sheet-node" class="bg-white p-5 max-w-[700px] mx-auto select-none flex flex-col justify-between text-slate-950 font-sans border-4 border-slate-900 rounded-lg shadow-sm">
-          
-          <!-- Top Row Corner Alignment Markers -->
-          <div class="flex justify-between items-start">
-            <div class="w-8 h-8 bg-slate-950 flex items-center justify-center relative">
-              <div class="absolute w-2.5 h-2.5 bg-white"></div>
+            <div>
+                <span class="text-xs text-slate-400 block font-medium">Teacher Guide Note</span>
+                <p id="popoverNote" class="text-xs text-slate-600 dark:text-slate-300 mt-0.5"></p>
             </div>
-            
-            <div class="text-center">
-              <h1 class="text-xl font-black tracking-tight text-slate-950 uppercase">${name}</h1>
-              <p class="text-[10px] text-slate-500 font-semibold tracking-wider">BUNSURAN NATIONAL HIGH SCHOOL (#MEC)</p>
-            </div>
-
-            <div class="w-8 h-8 bg-slate-950 flex items-center justify-center relative">
-              <div class="absolute w-2.5 h-2.5 bg-white"></div>
-            </div>
-          </div>
-
-          <!-- Handwritten Meta Box (Name, Section, Subject) -->
-          <div class="border-2 border-slate-900 rounded-xl p-4 my-4 grid grid-cols-2 gap-4 bg-slate-50/50">
-            <div class="space-y-2 border-r border-slate-200 pr-4">
-              <div class="flex items-end gap-2">
-                <span class="text-[10px] font-bold text-slate-700 w-12">NAME:</span>
-                <div class="flex-grow border-b border-slate-400 h-5"></div>
-              </div>
-              <div class="flex items-end gap-2">
-                <span class="text-[10px] font-bold text-slate-700 w-12">SECTION:</span>
-                <div class="flex-grow border-b border-slate-400 h-5"></div>
-              </div>
-            </div>
-            <div class="space-y-2 pl-2">
-              <div class="flex items-end gap-2">
-                <span class="text-[10px] font-bold text-slate-700 w-14">SUBJECT:</span>
-                <div class="flex-grow border-b border-slate-400 h-5"></div>
-              </div>
-              <div class="flex items-end gap-2">
-                <span class="text-[10px] font-bold text-slate-700 w-14">DATE:</span>
-                <div class="flex-grow border-b border-slate-400 h-5"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Dynamic bubble body matrix -->
-          ${gridHTML}
-
-          <!-- Bottom Row Corner Alignment Markers -->
-          <div class="flex justify-between items-end mt-6 pt-4 border-t border-slate-100">
-            <div class="w-8 h-8 bg-slate-950 flex items-center justify-center relative">
-              <div class="absolute w-2.5 h-2.5 bg-white"></div>
-            </div>
-            
-            <div class="text-center max-w-[70%]">
-              <p class="text-[8px] font-semibold text-slate-400">Keep alignment squares un-obscured. Darken bubbles completely using black ink or pencil.</p>
-              <p class="text-[8px] font-bold text-indigo-600/75 tracking-wider uppercase mt-0.5">Do not write on the squares</p>
-            </div>
-
-            <div class="w-8 h-8 bg-slate-950 flex items-center justify-center relative">
-              <div class="absolute w-2.5 h-2.5 bg-white"></div>
-            </div>
-          </div>
-
         </div>
-      `;
-    }
-
-    /* =========================================================================
-       HIGH FIDELITY PNG EXPORT FUNCTION
-       ========================================================================= */
-    function downloadSheetAsPNG() {
-      const node = document.getElementById('target-sheet-node');
-      if (!node) {
-        showToast("⚠️ Render preview not initialized.");
-        return;
-      }
-      
-      showToast("⏳ Rendering sheet to high-res PNG...");
-
-      html2canvas(node, {
-        scale: 2.5, // Crisp resolution scaling
-        logging: false,
-        useCORS: true
-      }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `OpenGrade_Sheet_${state.testName.replace(/\s+/g, '_')}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        showToast("✓ PNG Download started!");
-      }).catch(err => {
-        console.error("PNG render failure:", err);
-        showToast("❌ Unable to render image layout.");
-      });
-    }
-
-    /* =========================================================================
-       TAB 3: CAMERA STREAM & SCANNER OPERATIONS
-       ========================================================================= */
-    const webcamStreamEl = document.getElementById('webcam-stream');
-    const cameraSelectEl = document.getElementById('camera-select');
-    const calibStatusEl = document.getElementById('calibration-status');
-    const gradeResultCardEl = document.getElementById('grade-result-card');
-    const keyResultCardEl = document.getElementById('key-result-card');
-    const scannerPlaceholderEl = document.getElementById('scanner-placeholder');
-    const saveScanBtnEl = document.getElementById('save-scan-btn');
-
-    async function populateCameras() {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(d => d.kind === 'videoinput');
-        
-        cameraSelectEl.innerHTML = '';
-        videoDevices.forEach((device, index) => {
-          const option = document.createElement('option');
-          option.value = device.deviceId;
-          option.text = device.label || `Camera ${index + 1}`;
-          if (device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment')) {
-            option.selected = true;
-          }
-          cameraSelectEl.appendChild(option);
-        });
-      } catch (err) {
-        console.warn("Unable to map capture devices explicitly:", err);
-      }
-    }
-
-    async function startScanner() {
-      await populateCameras();
-      
-      const constraints = {
-        video: {
-          deviceId: cameraSelectEl.value ? { exact: cameraSelectEl.value } : undefined,
-          facingMode: { ideal: "environment" },
-          width: { ideal: 600 },
-          height: { ideal: 800 }
-        }
-      };
-
-      try {
-        if (state.videoStream) {
-          stopScanner();
-        }
-        
-        state.videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-        webcamStreamEl.srcObject = state.videoStream;
-        state.isScanningActive = true;
-      } catch (err) {
-        calibStatusEl.innerHTML = `
-          <div class="w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-black text-white">X</div>
-          <div>
-            <h4 class="text-xs font-semibold text-red-400">Camera Access Error</h4>
-            <p class="text-[10px] text-slate-400 font-medium">Please review application capture permissions inside settings.</p>
-          </div>
-        `;
-      }
-    }
-
-    function stopScanner() {
-      state.isScanningActive = false;
-      if (state.videoStream) {
-        state.videoStream.getTracks().forEach(track => track.stop());
-        state.videoStream = null;
-      }
-    }
-
-    function setScanMode(mode) {
-      state.scanMode = mode;
-      const studentBtn = document.getElementById('scan-mode-student');
-      const keyBtn = document.getElementById('scan-mode-key');
-      const label = document.getElementById('scan-target-mode-label');
-
-      if (mode === 'student') {
-        studentBtn.className = "px-2.5 py-1 text-[10px] font-bold rounded bg-indigo-600 text-white transition-all";
-        keyBtn.className = "px-2.5 py-1 text-[10px] font-bold rounded text-slate-400 hover:text-white transition-all";
-        label.innerText = "MODE: Student sheet grading";
-        label.className = "block font-black text-emerald-400 uppercase text-[10px] tracking-wider mt-1";
-      } else {
-        keyBtn.className = "px-2.5 py-1 text-[10px] font-bold rounded bg-indigo-600 text-white transition-all";
-        studentBtn.className = "px-2.5 py-1 text-[10px] font-bold rounded text-slate-400 hover:text-white transition-all";
-        label.innerText = "MODE: Scanning Blank Key Template";
-        label.className = "block font-black text-amber-400 uppercase text-[10px] tracking-wider mt-1";
-      }
-    }
-
-    /* =========================================================================
-       OMR SCANNER COMPUTER VISION PIPELINE
-       ========================================================================= */
-    function triggerImmediateScan() {
-      if (!state.isScanningActive) {
-        showToast("⚠️ Cam source offline. Reactivate scan tab.");
-        return;
-      }
-
-      const flashEl = document.getElementById('scanner-flash');
-      const flashTextEl = document.getElementById('flash-text');
-      flashTextEl.innerText = state.scanMode === 'student' ? 'GRADING!' : 'KEY READ!';
-      flashEl.style.opacity = '1';
-      setTimeout(() => { flashEl.style.opacity = '0'; }, 200);
-
-      processCurrentFrame();
-    }
-
-    function processCurrentFrame() {
-      const calcCanvas = document.getElementById('calc-canvas');
-      const calcCtx = calcCanvas.getContext('2d');
-      calcCtx.drawImage(webcamStreamEl, 0, 0, calcCanvas.width, calcCanvas.height);
-
-      const frameData = calcCtx.getImageData(0, 0, calcCanvas.width, calcCanvas.height);
-      
-      const grayCanvas = document.getElementById('gray-canvas');
-      const grayCtx = grayCanvas.getContext('2d');
-      const grayData = grayCtx.createImageData(calcCanvas.width, calcCanvas.height);
-      
-      for (let i = 0; i < frameData.data.length; i += 4) {
-        const r = frameData.data[i];
-        const g = frameData.data[i+1];
-        const b = frameData.data[i+2];
-        const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-        
-        grayData.data[i] = gray;
-        grayData.data[i+1] = gray;
-        grayData.data[i+2] = gray;
-        grayData.data[i+3] = 255;
-      }
-      grayCtx.putImageData(grayData, 0, 0);
-
-      // Search calibration target bounding points
-      const tlLocked = searchTargetSquareCentroid(grayData, 15, 110, 15, 110);
-      const trLocked = searchTargetSquareCentroid(grayData, 490, 585, 15, 110);
-      const blLocked = searchTargetSquareCentroid(grayData, 15, 110, 690, 785);
-      const brLocked = searchTargetSquareCentroid(grayData, 490, 585, 690, 785);
-
-      const allCornersValid = tlLocked && trLocked && blLocked && brLocked;
-
-      if (!allCornersValid) {
-        calibStatusEl.innerHTML = `
-          <div class="w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-black text-white">X</div>
-          <div>
-            <h4 class="text-xs font-semibold text-red-400">Scan Calibration Failed</h4>
-            <p class="text-[10px] text-slate-400 font-medium">Position alignment dots clearly inside viewfinder brackets.</p>
-          </div>
-        `;
-        return;
-      }
-
-      calibStatusEl.innerHTML = `
-        <div class="w-3.5 h-3.5 bg-emerald-500 rounded-full flex items-center justify-center text-[8px] font-black text-white">✓</div>
-        <div>
-          <h4 class="text-xs font-semibold text-emerald-400">Locked & Calibrated</h4>
-          <p class="text-[10px] text-slate-300">Target structures resolved. Extracting bubble density mapping...</p>
-        </div>
-      `;
-
-      // Read values inside calibrated frame
-      const mappedGrades = scanAnswersSection(grayData, tlLocked, trLocked, blLocked, brLocked);
-
-      if (state.scanMode === 'student') {
-        // AI Handwriting extraction crop
-        performHandwritingRecognitionCrop(frameData, tlLocked, trLocked, blLocked, brLocked);
-        evaluateGradedSheet(mappedGrades);
-      } else {
-        // Scannable key mode
-        evaluateKeyTemplateSheet(mappedGrades);
-      }
-    }
-
-    function searchTargetSquareCentroid(grayData, minX, maxX, minY, maxY) {
-      let sumX = 0;
-      let sumY = 0;
-      let count = 0;
-      const width = 600;
-      const threshold = 80;
-
-      for(let y = minY; y < maxY; y++) {
-        for(let x = minX; x < maxX; x++) {
-          const idx = (y * width + x) * 4;
-          const val = grayData.data[idx];
-          if (val < threshold) {
-            sumX += x;
-            sumY += y;
-            count++;
-          }
-        }
-      }
-
-      if (count < 15) return null;
-
-      return {
-        x: sumX / count,
-        y: sumY / count
-      };
-    }
-
-    function getBilinearPoint(u, v, tl, tr, bl, br) {
-      const x = (1 - u) * (1 - v) * tl.x + u * (1 - v) * tr.x + (1 - u) * v * bl.x + u * v * br.x;
-      const y = (1 - u) * (1 - v) * tl.y + u * (1 - v) * tr.y + (1 - u) * v * bl.y + u * v * br.y;
-      return { x: Math.round(x), y: Math.round(y) };
-    }
-
-    function isBubbleFilled(grayData, pt) {
-      const radius = 5;
-      let sumInside = 0;
-      let countInside = 0;
-      const width = 600;
-
-      for(let dy = -radius; dy <= radius; dy++) {
-        for(let dx = -radius; dx <= radius; dx++) {
-          if (dx*dx + dy*dy <= radius*radius) {
-            const px = pt.x + dx;
-            const py = pt.y + dy;
-            if (px >= 0 && px < width && py >= 0 && py < 800) {
-              const idx = (py * width + px) * 4;
-              sumInside += grayData.data[idx];
-              countInside++;
-            }
-          }
-        }
-      }
-
-      const averageBrightness = sumInside / countInside;
-      return averageBrightness < 115; // Dark bubble threshold density
-    }
-
-    function scanAnswersSection(grayData, tl, tr, bl, br) {
-      const answersMap = {};
-      const numQs = state.numQuestions;
-      const colsCount = 4;
-      const maxRowsPerCol = Math.ceil(numQs / colsCount);
-      const optsCount = state.optionsPerQuestion;
-
-      for (let i = 0; i < numQs; i++) {
-        const col = Math.floor(i / maxRowsPerCol);
-        const rowInCol = i % maxRowsPerCol;
-
-        const v = 0.41 + (rowInCol * (0.49 / maxRowsPerCol));
-
-        let optionShades = [];
-
-        for (let opt = 0; opt < optsCount; opt++) {
-          const colOffset = col * 0.23;
-          const colStart = 0.07 + colOffset;
-          const optOffset = opt * 0.038;
-          const u = colStart + optOffset;
-
-          const pt = getBilinearPoint(u, v, tl, tr, bl, br);
-          const filled = isBubbleFilled(grayData, pt);
-          
-          if (filled) {
-            optionShades.push(String.fromCharCode(65 + opt));
-          }
-        }
-
-        if (optionShades.length === 1) {
-          answersMap[i] = optionShades[0];
-        } else if (optionShades.length > 1) {
-          answersMap[i] = "MULT";
-        } else {
-          answersMap[i] = "BLANK";
-        }
-      }
-
-      return answersMap;
-    }
-
-    /* =========================================================================
-       GEMINI HANDWRITING HEADER CROP & OCR LOGIC
-       ========================================================================= */
-    function performHandwritingRecognitionCrop(frameData, tl, tr, bl, br) {
-      const cropCanvas = document.createElement('canvas');
-      cropCanvas.width = 400;
-      cropCanvas.height = 120;
-      const cropCtx = cropCanvas.getContext('2d');
-      const cropImgData = cropCtx.createImageData(400, 120);
-
-      for (let y = 0; y < 120; y++) {
-        for (let x = 0; x < 400; x++) {
-          const u = 0.05 + (x / 400) * 0.90;
-          const v = 0.13 + (y / 120) * 0.20;
-          const pt = getBilinearPoint(u, v, tl, tr, bl, br);
-          
-          const srcIdx = (pt.y * 600 + pt.x) * 4;
-          const destIdx = (y * 400 + x) * 4;
-          
-          if (srcIdx >= 0 && srcIdx < frameData.data.length) {
-            cropImgData.data[destIdx] = frameData.data[srcIdx];
-            cropImgData.data[destIdx+1] = frameData.data[srcIdx+1];
-            cropImgData.data[destIdx+2] = frameData.data[srcIdx+2];
-            cropImgData.data[destIdx+3] = 255;
-          }
-        }
-      }
-      cropCtx.putImageData(cropImgData, 0, 0);
-      const cropImgUrl = cropCanvas.toDataURL('image/jpeg', 0.85);
-      const base64Img = cropImgUrl.split(',')[1];
-
-      // Update UI Crop Preview immediately
-      const previewEl = document.getElementById('scan-crop-preview');
-      if (previewEl) {
-        previewEl.src = cropImgUrl;
-        previewEl.classList.remove('hidden');
-      }
-
-      // Pre-populate fields for instant offline save
-      document.getElementById('scan-student-name').value = "Pending Sync 🔄";
-      document.getElementById('scan-student-section').value = "Pending";
-      document.getElementById('scan-student-subject').value = state.testName;
-
-      // Update current scan state parameters (Offline First)
-      if (state.currentScan) {
-        state.currentScan.headerImage = base64Img;
-        state.currentScan.needsSync = 1;
-        state.currentScan.studentName = "Pending Sync 🔄";
-        state.currentScan.section = "Pending";
-        state.currentScan.subject = state.testName;
-      }
-
-      const aiStatusEl = document.getElementById('ai-scanning-state');
-      if (aiStatusEl) {
-        aiStatusEl.innerText = "Offline-Ready (Stored)";
-        aiStatusEl.className = "text-[10px] text-indigo-400 font-bold";
-      }
-    }
-
-    async function triggerInstantOCR() {
-      if (!state.currentScan || !state.currentScan.headerImage) {
-        showToast("⚠️ No captured sheet header image to sync.");
-        return;
-      }
-      await triggerHandwritingOCRAPI(state.currentScan.headerImage);
-    }
-
-    async function triggerHandwritingOCRAPI(base64Data) {
-      const aiStatusEl = document.getElementById('ai-scanning-state');
-      aiStatusEl.innerText = "Syncing with Gemini API...";
-      aiStatusEl.className = "text-[10px] text-amber-400 font-bold animate-pulse";
-
-      const systemPrompt = "Perform OCR on this deskewed student header crop of an exam sheet. " +
-                           "Extract the handwritten metadata values: Name, Section, and Subject. " +
-                           "Output ONLY a JSON response matching the schema. Do not output conversational text or markdown codeblocks.";
-
-      const userPrompt = "Analyze sheet header and extract fields.";
-
-      const payload = {
-        contents: [{
-          role: "user",
-          parts: [
-            { text: userPrompt },
-            { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-          ]
-        }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: { 
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              name: { type: "STRING" },
-              section: { type: "STRING" },
-              subject: { type: "STRING" }
-            },
-            required: ["name", "section", "subject"]
-          }
-        }
-      };
-
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-      let delay = 1000;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        try {
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (textResponse) {
-              const parsed = JSON.parse(textResponse);
-              
-              document.getElementById('scan-student-name').value = parsed.name || "Handwritten Name";
-              document.getElementById('scan-student-section').value = parsed.section || "A";
-              document.getElementById('scan-student-subject').value = parsed.subject || state.testName;
-              
-              if (state.currentScan) {
-                state.currentScan.studentName = parsed.name || "Handwritten Name";
-                state.currentScan.section = parsed.section || "A";
-                state.currentScan.subject = parsed.subject || state.testName;
-                state.currentScan.needsSync = 0; // Successfully resolved!
-              }
-
-              aiStatusEl.innerText = "✓ Synced!";
-              aiStatusEl.className = "text-[10px] text-emerald-400 font-bold";
-              return true;
-            }
-          }
-        } catch (e) {
-          // Silent backoff retry
-        }
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2;
-      }
-
-      aiStatusEl.innerText = "❌ Sync failed (Offline)";
-      aiStatusEl.className = "text-[10px] text-rose-400 font-bold";
-      return false;
-    }
-
-    /* =========================================================================
-       OMR SCANNED KEYS SHEET IMPORT
-       ========================================================================= */
-    function evaluateKeyTemplateSheet(scannedAnswers) {
-      state.scannedAnswerKey = {};
-      const listContainer = document.getElementById('key-scanned-details');
-      listContainer.innerHTML = '';
-
-      for(let i = 0; i < state.numQuestions; i++) {
-        const choice = scannedAnswers[i];
-        state.scannedAnswerKey[i] = (choice === 'BLANK' || choice === 'MULT') ? 'A' : choice;
-
-        const badge = document.createElement('div');
-        badge.className = "flex flex-col items-center bg-slate-900/60 p-1 border border-slate-700/40 rounded text-center";
-        badge.innerHTML = `
-          <span class="text-[8px] text-slate-500 font-bold">Q${i+1}</span>
-          <span class="text-xs font-bold text-amber-400 mt-0.5">${state.scannedAnswerKey[i]}</span>
-        `;
-        listContainer.appendChild(badge);
-      }
-
-      scannerPlaceholderEl.classList.add('hidden');
-      gradeResultCardEl.classList.add('hidden');
-      keyResultCardEl.classList.remove('hidden');
-      saveScanBtnEl.classList.add('hidden');
-    }
-
-    function commitScannedKeyToTest() {
-      if (!state.scannedAnswerKey) return;
-      state.answerKey = { ...state.scannedAnswerKey };
-      renderKeyGrid();
-      updateKeyCountBadge();
-      
-      saveTestProfile();
-      switchTab('tab-key');
-      showToast("✓ Template imported as answer key.");
-    }
-
-    /* =========================================================================
-       OMR GRADING SHEET ANALYSIS
-       ========================================================================= */
-    function evaluateGradedSheet(scannedAnswers) {
-      let correctCount = 0;
-      const numQs = state.numQuestions;
-      const detailsGrid = document.getElementById('scan-details-list');
-      
-      detailsGrid.innerHTML = '';
-
-      for(let i = 0; i < numQs; i++) {
-        const key = state.answerKey[i];
-        const choice = scannedAnswers[i];
-        const isCorrect = choice === key;
-        
-        if (isCorrect) correctCount++;
-
-        const badge = document.createElement('div');
-        badge.className = `flex flex-col items-center justify-center p-1 rounded border text-center ${
-          isCorrect 
-          ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400' 
-          : 'bg-rose-950/40 border-rose-500/30 text-rose-400'
-        }`;
-        badge.innerHTML = `
-          <span class="text-[8px] font-bold text-slate-500">Q${i+1}</span>
-          <span class="text-xs font-black mt-0.5">${choice === 'BLANK' ? 'Ø' : choice}</span>
-          <span class="text-[8px] font-medium text-slate-500">Key: ${key}</span>
-        `;
-        detailsGrid.appendChild(badge);
-      }
-
-      const percentage = Math.round((correctCount / numQs) * 100);
-
-      state.currentScan = {
-        id: "grade-" + Date.now(),
-        testId: state.activeTestId,
-        studentName: "Pending Sync 🔄", 
-        section: "Pending",
-        subject: state.testName,
-        score: correctCount,
-        total: numQs,
-        pct: percentage,
-        timestamp: new Date().toLocaleString(),
-        answers: scannedAnswers,
-        headerImage: "", // Will be assigned on crop mapping
-        needsSync: 1
-      };
-
-      document.getElementById('scan-pct').innerText = `${percentage}%`;
-      document.getElementById('scan-score-fraction').innerText = `${correctCount} / ${numQs}`;
-
-      const badgeEl = document.getElementById('scan-badge');
-      if (percentage >= 60) {
-        badgeEl.innerText = "PASSED";
-        badgeEl.className = "inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-      } else {
-        badgeEl.innerText = "FAILED";
-        badgeEl.className = "inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20";
-      }
-
-      scannerPlaceholderEl.classList.add('hidden');
-      keyResultCardEl.classList.add('hidden');
-      gradeResultCardEl.classList.remove('hidden');
-      saveScanBtnEl.classList.remove('hidden');
-    }
-
-    async function saveCurrentScan() {
-      if (!state.currentScan) return;
-
-      const studentName = document.getElementById('scan-student-name').value || "Unknown Student";
-      const section = document.getElementById('scan-student-section').value || "Section A";
-      const subject = document.getElementById('scan-student-subject').value || state.testName;
-
-      state.currentScan.studentName = studentName;
-      state.currentScan.section = section;
-      state.currentScan.subject = subject;
-
-      // If the user manually overrides "Pending Sync 🔄", clear needsSync flag
-      if (studentName !== "Pending Sync 🔄") {
-        state.currentScan.needsSync = 0;
-      }
-
-      // Persist log entry directly into IndexedDB local storage
-      await db.grades.put(state.currentScan);
-
-      state.currentScan = null;
-      
-      // Hide crop preview
-      const previewEl = document.getElementById('scan-crop-preview');
-      if (previewEl) previewEl.classList.add('hidden');
-
-      gradeResultCardEl.classList.add('hidden');
-      saveScanBtnEl.classList.add('hidden');
-      scannerPlaceholderEl.classList.remove('hidden');
-      
-      calibStatusEl.innerHTML = `
-        <div class="w-3.5 h-3.5 bg-yellow-500 rounded-full flex items-center justify-center text-[8px] font-black text-slate-950">!</div>
-        <div>
-          <h4 class="text-xs font-semibold text-slate-200">Awaiting Alignment</h4>
-          <p class="text-[10px] text-slate-400 font-medium">Position next answer sheet inside camera frame.</p>
-        </div>
-      `;
-
-      showToast("📥 Record saved into Gradebook database.");
-    }
-
-    /* =========================================================================
-       DEXIE RETRIEVALS & VISUAL STATS
-       ========================================================================= */
-    function renderGradebook() {
-      const tBody = document.getElementById('history-table-body');
-      tBody.innerHTML = '';
-
-      if (state.gradebook.length === 0) {
-        const emptyRow = document.createElement('tr');
-        emptyRow.id = "empty-history-row";
-        emptyRow.innerHTML = `
-          <td colspan="6" class="py-8 text-center text-slate-500">
-            Gradebook is currently empty.
-          </td>
-        `;
-        tBody.appendChild(emptyRow);
-        updateAnalyticsWidgets();
-        checkPendingSyncCount();
-        return;
-      }
-
-      state.gradebook.forEach((entry) => {
-        const row = document.createElement('tr');
-        row.className = "border-b border-slate-700/30 hover:bg-slate-800/20 transition";
-        
-        const syncBadge = entry.needsSync === 1 
-          ? `<span class="inline-block ml-2 text-[10px] px-2 py-0.5 rounded font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">Pending Sync 🔄</span>`
-          : '';
-
-        row.innerHTML = `
-          <td class="py-3.5 px-4 font-bold text-slate-100 flex items-center">
-            ${entry.studentName}
-            ${syncBadge}
-          </td>
-          <td class="py-3.5 px-4 text-slate-300">${entry.section} / ${entry.subject}</td>
-          <td class="py-3.5 px-4 text-center font-semibold text-slate-200">${entry.score} / ${entry.total}</td>
-          <td class="py-3.5 px-4 text-center">
-            <span class="inline-block px-2 py-0.5 rounded text-xs font-bold ${
-              entry.pct >= 60 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-            }">${entry.pct}%</span>
-          </td>
-          <td class="py-3.5 px-4 text-slate-400 text-xs">${entry.timestamp}</td>
-          <td class="py-3.5 px-4 text-right">
-            <button onclick="deleteGradebookItem('${entry.id}')" class="text-xs font-semibold text-rose-400 hover:text-rose-300 transition">
-              Delete
-            </button>
-          </td>
-        `;
-        tBody.appendChild(row);
-      });
-
-      updateAnalyticsWidgets();
-      checkPendingSyncCount();
-    }
-
-    function checkPendingSyncCount() {
-      const pending = state.gradebook.filter(g => g.needsSync === 1);
-      const banner = document.getElementById('sync-banner');
-      const countEl = document.getElementById('pending-sync-count');
-      
-      if (pending.length > 0) {
-        countEl.innerText = pending.length;
-        banner.classList.remove('hidden');
-      } else {
-        banner.classList.add('hidden');
-      }
-    }
-
-    async function startBulkOCRSync() {
-      const pending = state.gradebook.filter(g => g.needsSync === 1);
-      if (pending.length === 0) {
-        showToast("✓ All grades are already synced.");
-        return;
-      }
-
-      const btn = document.getElementById('bulk-sync-btn');
-      const originalText = btn.innerHTML;
-      btn.disabled = true;
-      
-      showToast(`⚡ Synchronizing ${pending.length} records...`);
-
-      let successCount = 0;
-      for (let i = 0; i < pending.length; i++) {
-        const entry = pending[i];
-        btn.innerHTML = `🔄 Syncing (${i + 1}/${pending.length})...`;
-        
-        const systemPrompt = "Perform OCR on this deskewed student header crop of an exam sheet. " +
-                             "Extract the handwritten metadata values: Name, Section, and Subject. " +
-                             "Output ONLY a JSON response matching the schema. Do not output conversational text or markdown codeblocks.";
-
-        const userPrompt = "Analyze sheet header and extract fields.";
-
-        const payload = {
-          contents: [{
-            role: "user",
-            parts: [
-              { text: userPrompt },
-              { inlineData: { mimeType: "image/jpeg", data: entry.headerImage } }
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Preset Rubrics for instant customization
+        const PRESET_RUBRICS = {
+            poem: [
+                { id: 'creativity', label: 'Creativity & Imagination', max: 25 },
+                { id: 'structure', label: 'Form, Rhythm & Meter', max: 25 },
+                { id: 'imagery', label: 'Figurative Language & Imagery', max: 25 },
+                { id: 'mechanics', label: 'Spelling, Grammar & Flow', max: 25 }
+            ],
+            essay: [
+                { id: 'argument', label: 'Thesis & Argumentation', max: 30 },
+                { id: 'structure', label: 'Structure & Coherence', max: 25 },
+                { id: 'evidence', label: 'Evidence & Analytical Support', max: 25 },
+                { id: 'mechanics', label: 'Grammar, Syntax & Tone', max: 20 }
+            ],
+            journal: [
+                { id: 'reflection', label: 'Depth of Self-Reflection', max: 40 },
+                { id: 'insight', label: 'Honesty & Insight', max: 30 },
+                { id: 'expression', label: 'Clarity & Expression Style', max: 30 }
+            ],
+            story: [
+                { id: 'character', label: 'Character Development', max: 25 },
+                { id: 'plot', label: 'Narrative Arc & Plot', max: 25 },
+                { id: 'dialogue', label: 'Dialogue & Setting', max: 25 },
+                { id: 'grammar', label: 'Stylistic Mechanics', max: 25 }
+            ],
+            scientific: [
+                { id: 'hypothesis', label: 'Problem & Hypothesis', max: 20 },
+                { id: 'methodology', label: 'Clarity of Methodology', max: 30 },
+                { id: 'data', label: 'Data Analysis & Visuals', max: 30 },
+                { id: 'conclusion', label: 'Conclusion Validity', max: 20 }
             ]
-          }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { 
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                name: { type: "STRING" },
-                section: { type: "STRING" },
-                subject: { type: "STRING" }
-              },
-              required: ["name", "section", "subject"]
-            }
-          }
         };
 
-        const correctUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        // Application State
+        let state = {
+            apiKey: localStorage.getItem('markflow_api_key') || '',
+            rubrics: [],
+            scannedBase64: null,
+            scannedMime: null,
+            analysisResult: null
+        };
 
-        let synced = false;
-        let delay = 1000;
+        // DOM Elements
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        const sunIcon = document.getElementById('sunIcon');
+        const moonIcon = document.getElementById('moonIcon');
+        const openSettingsBtn = document.getElementById('openSettingsBtn');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+        const assignmentCategory = document.getElementById('assignmentCategory');
+        const rubricsContainer = document.getElementById('rubricsContainer');
+        const addRubricBtn = document.getElementById('addRubricBtn');
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const uploadPrompt = document.getElementById('uploadPrompt');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const removeImageBtn = document.getElementById('removeImageBtn');
+        const runAnalysisBtn = document.getElementById('runAnalysisBtn');
+        const resultsPlaceholder = document.getElementById('resultsPlaceholder');
+        const resultsLoader = document.getElementById('resultsLoader');
+        const resultsDashboard = document.getElementById('resultsDashboard');
+        const loadDemoBtn = document.getElementById('loadDemoBtn');
         
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            const response = await fetch(correctUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
+        // Report Dashboard Items
+        const reportAssignmentMeta = document.getElementById('reportAssignmentMeta');
+        const reportStudentName = document.getElementById('reportStudentName');
+        const reportDate = document.getElementById('reportDate');
+        const reportOverallScore = document.getElementById('reportOverallScore');
+        const reportMaxScore = document.getElementById('reportMaxScore');
+        const aiProbabilityBadge = document.getElementById('aiProbabilityBadge');
+        const aiProbabilityBar = document.getElementById('aiProbabilityBar');
+        const aiProbabilityExplanation = document.getElementById('aiProbabilityExplanation');
+        const overallFeedbackText = document.getElementById('overallFeedbackText');
+        const scoreBreakdownGrid = document.getElementById('scoreBreakdownGrid');
+        const extractedTextBody = document.getElementById('extractedTextBody');
+        const annotationsList = document.getElementById('annotationsList');
 
-            if (response.ok) {
-              const data = await response.json();
-              const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (textResponse) {
-                const parsed = JSON.parse(textResponse);
-                
-                entry.studentName = parsed.name || "Handwritten Name";
-                entry.section = parsed.section || "A";
-                entry.subject = parsed.subject || state.testName;
-                entry.needsSync = 0; 
-                
-                await db.grades.put(entry);
-                successCount++;
-                synced = true;
-                break;
-              }
+        // Popover Elements
+        const annotationPopover = document.getElementById('annotationPopover');
+        const popoverBadge = document.getElementById('popoverBadge');
+        const popoverOriginal = document.getElementById('popoverOriginal');
+        const popoverCorrection = document.getElementById('popoverCorrection');
+        const popoverNote = document.getElementById('popoverNote');
+        const closePopoverBtn = document.getElementById('closePopoverBtn');
+
+        // Light/Dark Theme Handling
+        function initTheme() {
+            if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+            } else {
+                document.documentElement.classList.remove('dark');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
             }
-          } catch (e) {
-            // Exp backoff retry
-          }
-          await new Promise(resolve => setTimeout(resolve, delay));
-          delay *= 2;
         }
 
-        if (!synced) {
-          showToast(`⚠️ Sync paused on record ${i + 1}. Please verify your internet connection.`);
-          break;
-        }
-      }
-
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-      
-      await loadGradebookFromDB();
-      renderGradebook();
-      showToast(`✓ Successfully synced ${successCount} record(s).`);
-    }
-
-    async function deleteGradebookItem(id) {
-      await db.grades.delete(id);
-      await loadGradebookFromDB();
-      renderGradebook();
-      showToast("🗑️ Log deleted successfully.");
-    }
-
-    async function clearGradebook() {
-      await db.grades.where('testId').equals(state.activeTestId).delete();
-      await loadGradebookFromDB();
-      renderGradebook();
-      showToast("🧹 Scans DB wiped.");
-    }
-
-    function updateAnalyticsWidgets() {
-      const total = state.gradebook.length;
-      if (total === 0) {
-        document.getElementById('stat-total-students').innerText = '0';
-        document.getElementById('stat-class-average').innerText = '0%';
-        document.getElementById('stat-highest-score').innerText = '--';
-        document.getElementById('stat-lowest-score').innerText = '--';
-        document.getElementById('item-analysis-container').innerHTML = `
-          <div class="col-span-full py-6 text-center text-slate-500 text-xs italic">
-            Save graded sheets to reveal classroom item analysis statistics.
-          </div>
-        `;
-        return;
-      }
-
-      let totalPctSum = 0;
-      let highestPct = 0;
-      let lowestPct = 100;
-
-      state.gradebook.forEach(item => {
-        totalPctSum += item.pct;
-        if (item.pct > highestPct) highestPct = item.pct;
-        if (item.pct < lowestPct) lowestPct = item.pct;
-      });
-
-      const averagePct = Math.round(totalPctSum / total);
-
-      document.getElementById('stat-total-students').innerText = total;
-      document.getElementById('stat-class-average').innerText = `${averagePct}%`;
-      document.getElementById('stat-highest-score').innerText = `${highestPct}%`;
-      document.getElementById('stat-lowest-score').innerText = `${lowestPct}%`;
-
-      const container = document.getElementById('item-analysis-container');
-      container.innerHTML = '';
-
-      for (let i = 0; i < state.numQuestions; i++) {
-        let missedCount = 0;
-        
-        state.gradebook.forEach(entry => {
-          const key = state.answerKey[i];
-          const choice = entry.answers[i];
-          if (choice !== key) {
-            missedCount++;
-          }
+        themeToggleBtn.addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+            }
         });
 
-        const missedPct = Math.round((missedCount / total) * 100);
-        const diffColor = missedPct > 50 ? 'bg-rose-500' : (missedPct > 20 ? 'bg-yellow-500' : 'bg-emerald-500');
+        // Initialize App UI
+        window.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            lucide.createIcons();
+            
+            // Set initial API key state
+            if (state.apiKey) {
+                apiKeyInput.value = state.apiKey;
+                setApiBadgeState(true);
+            } else {
+                setApiBadgeState(false);
+            }
 
-        const bar = document.createElement('div');
-        bar.className = "bg-slate-900/60 border border-slate-800 p-3 rounded-xl flex flex-col justify-between space-y-1.5";
-        bar.innerHTML = `
-          <div class="flex justify-between items-center text-xs">
-            <span class="font-bold text-slate-300">Q${i+1} <span class="text-[10px] text-slate-500 font-medium">(Key: ${state.answerKey[i]})</span></span>
-            <span class="font-mono text-slate-400 text-[9px]">${missedCount}/${total} missed (${missedPct}%)</span>
-          </div>
-          <div class="w-full bg-slate-850 h-2 rounded-full overflow-hidden">
-            <div class="${diffColor} h-full rounded-full animate-pulse" style="width: ${missedPct}%"></div>
-          </div>
-        `;
-        container.appendChild(bar);
-      }
-    }
+            // Load default Rubrics
+            loadRubricsPreset(assignmentCategory.value);
+        });
 
-    function exportGradebookToCSV() {
-      if (state.gradebook.length === 0) {
-        showToast("⚠️ Gradebook history log is currently empty.");
-        return;
-      }
+        // Toggle API settings modal
+        openSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+        closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
+        saveSettingsBtn.addEventListener('click', () => {
+            const key = apiKeyInput.value.trim();
+            localStorage.setItem('markflow_api_key', key);
+            state.apiKey = key;
+            setApiBadgeState(!!key);
+            settingsModal.classList.add('hidden');
+        });
 
-      let csvContent = "data:text/csv;charset=utf-8,";
-      csvContent += "Student Name,Section,Subject,Score,Total,Percentage,Timestamp\n";
+        function setApiBadgeState(isActive) {
+            if (isActive) {
+                openSettingsBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-500"></i><span class="hidden sm:inline">API Configured</span>`;
+                openSettingsBtn.classList.replace('bg-slate-100', 'bg-emerald-50');
+                openSettingsBtn.classList.replace('dark:bg-slate-800', 'dark:bg-emerald-950/30');
+            } else {
+                openSettingsBtn.innerHTML = `<i data-lucide="key" class="w-4 h-4"></i><span class="hidden sm:inline">Set API Key</span>`;
+                openSettingsBtn.classList.replace('bg-emerald-50', 'bg-slate-100');
+                openSettingsBtn.classList.replace('dark:bg-emerald-950/30', 'dark:bg-slate-800');
+            }
+            lucide.createIcons();
+        }
 
-      state.gradebook.forEach(item => {
-        csvContent += `"${item.studentName}","${item.section}","${item.subject}",${item.score},${item.total},${item.pct},"${item.timestamp}"\n`;
-      });
+        // Handle assignment category changes
+        assignmentCategory.addEventListener('change', (e) => {
+            loadRubricsPreset(e.target.value);
+        });
 
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `OpenGrade_Export_${state.testName.replace(/\s+/g, '_')}_Results.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+        function loadRubricsPreset(category) {
+            const presets = PRESET_RUBRICS[category] || PRESET_RUBRICS.essay;
+            rubricsContainer.innerHTML = '';
+            state.rubrics = [];
+            presets.forEach(preset => addRubricRow(preset.label, preset.max));
+        }
 
-    /* =========================================================================
-       UI TOAST MESSAGES
-       ========================================================================= */
-    function showToast(message) {
-      const toast = document.createElement('div');
-      toast.className = "bg-slate-850 border border-indigo-500 text-slate-200 text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 animate-bounce pointer-events-auto";
-      toast.innerHTML = `
-        <div class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></div>
-        <span>${message}</span>
-      `;
-      document.getElementById('toast-container').appendChild(toast);
-      setTimeout(() => {
-        toast.remove();
-      }, 2500);
-    }
-  </script>
+        function addRubricRow(label = '', max = 25) {
+            const id = 'rubric_' + Math.random().toString(36).substr(2, 9);
+            const row = document.createElement('div');
+            row.className = 'flex items-center space-x-2 bg-slate-50 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200 dark:border-slate-700/60';
+            row.id = id;
+            
+            row.innerHTML = `
+                <input type="text" value="${label}" placeholder="e.g. Structure" class="flex-1 min-w-0 bg-transparent border-0 focus:ring-0 focus:outline-none text-sm font-medium" />
+                <div class="flex items-center space-x-1.5 shrink-0">
+                    <span class="text-xs text-slate-400">Max Points:</span>
+                    <input type="number" value="${max}" min="1" max="100" class="w-14 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-1 py-0.5 text-center text-sm font-bold focus:outline-none" />
+                    <button class="text-rose-500 hover:text-rose-700 p-1" onclick="deleteRubricRow('${id}')">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `;
+            rubricsContainer.appendChild(row);
+            lucide.createIcons();
+            
+            // Keep state tracked
+            state.rubrics.push({ id, label, max });
+
+            // Setup input tracking
+            const textInput = row.querySelector('input[type="text"]');
+            const numInput = row.querySelector('input[type="number"]');
+            textInput.addEventListener('input', (e) => {
+                const index = state.rubrics.findIndex(r => r.id === id);
+                if (index !== -1) state.rubrics[index].label = e.target.value;
+            });
+            numInput.addEventListener('input', (e) => {
+                const index = state.rubrics.findIndex(r => r.id === id);
+                if (index !== -1) state.rubrics[index].max = parseInt(e.target.value) || 10;
+            });
+        }
+
+        window.deleteRubricRow = function(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+            state.rubrics = state.rubrics.filter(r => r.id !== id);
+        }
+
+        addRubricBtn.addEventListener('click', () => {
+            addRubricRow('', 20);
+        });
+
+        // Handle scanned image capture or file upload
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        });
+
+        // Drag & Drop Setup
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-brand-500', 'bg-brand-50/20');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-brand-500', 'bg-brand-50/20');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            if (file && file.type.startsWith('image/')) {
+                processFile(file);
+            }
+        });
+
+        function processFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                imagePreview.src = event.target.result;
+                uploadPrompt.classList.add('hidden');
+                imagePreviewContainer.classList.remove('hidden');
+                
+                // Save state data
+                state.scannedMime = file.type;
+                // Strip header to get clean base64 payload
+                state.scannedBase64 = event.target.result.split(',')[1];
+                
+                runAnalysisBtn.removeAttribute('disabled');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        removeImageBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.value = '';
+            state.scannedBase64 = null;
+            state.scannedMime = null;
+            imagePreview.src = '#';
+            imagePreviewContainer.classList.add('hidden');
+            uploadPrompt.classList.remove('hidden');
+            runAnalysisBtn.setAttribute('disabled', 'true');
+        });
+
+        // Trigger Analysis call to Gemini 2.5 Flash
+        runAnalysisBtn.addEventListener('click', async () => {
+            if (!state.apiKey) {
+                // Flash settings modal open as user guide if API is missing
+                settingsModal.classList.remove('hidden');
+                return;
+            }
+
+            // Move UI state to Processing
+            resultsPlaceholder.classList.add('hidden');
+            resultsDashboard.classList.add('hidden');
+            resultsLoader.classList.remove('hidden');
+            runAnalysisBtn.setAttribute('disabled', 'true');
+
+            // Format rubric parameters to pass directly to the Model Prompt
+            const criteriaDetails = state.rubrics.map(r => `Criteria: "${r.label}" (Maximum Score of ${r.max} points)`).join('\n');
+
+            const systemInstruction = "You are a professional educational assessor/grader. Your task is to perform handwritten document OCR parsing and comprehensively grade submissions in structured JSON format based on specific teacher-configured criteria.";
+
+            const userPrompt = `
+                Analyze the provided student submission image. 
+                Category of work: ${assignmentCategory.value}.
+
+                1. Execute high-precision Handwriting OCR. Transcribe all text accurately, retaining paragraphs and styling.
+                2. Evaluate the work against these customizable rubric dimensions:
+                ${criteriaDetails}
+
+                3. Identify detailed grammar, spelling, punctuation, or style flaws. For each flaw:
+                   - originalSnippet: The exact phrase/word from the text.
+                   - correction: The recommended correction.
+                   - type: Choose from: spelling, grammar, punctuation, style, coherence.
+                   - note: High-level teacher feedback as to why.
+
+                4. Calculate AI probability score (0-100) determining likelihood of AI generated content alongside logical reasoning details.
+
+                Respond in STRICT JSON conforming to this schema structure:
+                {
+                    "extractedText": "the raw transcribed content",
+                    "rubricScores": [
+                        { "criterion": "criterion label name", "score": integer_value, "maxScore": integer_value, "feedback": "brief note" }
+                    ],
+                    "overallFeedback": "comprehensive feedback highlighting strengths and paths for improvement",
+                    "aiAnalysis": {
+                        "aiProbability": integer_value,
+                        "reasoning": "stylistic markers analysis explanation"
+                    },
+                    "annotations": [
+                        { "originalSnippet": "exact phrase from transcription", "correction": "suggested revision", "type": "spelling/grammar/style", "note": "explanation" }
+                    ]
+                }
+            `;
+
+            try {
+                const response = await callGeminiWithRetry(state.scannedBase64, state.scannedMime, userPrompt, systemInstruction);
+                renderResults(response);
+            } catch (err) {
+                console.error(err);
+                resultsLoader.classList.add('hidden');
+                resultsPlaceholder.classList.remove('hidden');
+                alert("Gemini Grading Error: " + err.message);
+            } finally {
+                runAnalysisBtn.removeAttribute('disabled');
+            }
+        });
+
+        // Direct Fetch call with exponential backoff 
+        async function callGeminiWithRetry(base64Data, mimeType, prompt, systemPrompt, maxRetries = 5) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${state.apiKey}`;
+            
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        {
+                            inlineData: {
+                                mimeType: mimeType,
+                                data: base64Data
+                            }
+                        }
+                    ]
+                }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            extractedText: { type: "STRING" },
+                            rubricScores: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        criterion: { type: "STRING" },
+                                        score: { type: "INTEGER" },
+                                        maxScore: { type: "INTEGER" },
+                                        feedback: { type: "STRING" }
+                                    },
+                                    required: ["criterion", "score", "maxScore", "feedback"]
+                                }
+                            },
+                            overallFeedback: { type: "STRING" },
+                            aiAnalysis: {
+                                type: "OBJECT",
+                                properties: {
+                                    aiProbability: { type: "INTEGER" },
+                                    reasoning: { type: "STRING" }
+                                },
+                                required: ["aiProbability", "reasoning"]
+                            },
+                            annotations: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        originalSnippet: { type: "STRING" },
+                                        correction: { type: "STRING" },
+                                        type: { type: "STRING" },
+                                        note: { type: "STRING" }
+                                    },
+                                    required: ["originalSnippet", "correction", "type", "note"]
+                                }
+                            }
+                        },
+                        required: ["extractedText", "rubricScores", "overallFeedback", "aiAnalysis", "annotations"]
+                    }
+                }
+            };
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.error?.message || `HTTP ${response.status}`);
+                    }
+
+                    const json = await response.json();
+                    const textResult = json.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!textResult) throw new Error("Empty candidate result from Gemini API.");
+                    return JSON.parse(textResult);
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    // Exponential backoff
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                }
+            }
+        }
+
+        // Render Generated Grading Reports
+        function renderResults(data) {
+            resultsLoader.classList.add('hidden');
+            resultsDashboard.classList.remove('hidden');
+            
+            state.analysisResult = data;
+
+            // Set Meta Texts
+            const classVal = document.getElementById('classCode').value.trim() || 'UNASSIGNED CLASS';
+            const studentVal = document.getElementById('studentName').value.trim() || 'Handwritten Submission';
+            
+            reportAssignmentMeta.innerText = `${assignmentCategory.value.toUpperCase()} - ${classVal}`;
+            reportStudentName.innerText = studentVal;
+            reportDate.innerText = `Graded on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+
+            // Scores summary
+            let calculatedScore = 0;
+            let possibleMax = 0;
+            
+            scoreBreakdownGrid.innerHTML = '';
+            data.rubricScores.forEach(rubric => {
+                calculatedScore += rubric.score;
+                possibleMax += rubric.maxScore;
+
+                const percent = Math.round((rubric.score / rubric.maxScore) * 100);
+                const scoreCard = document.createElement('div');
+                scoreCard.className = 'p-4 rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40';
+                scoreCard.innerHTML = `
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs font-bold uppercase tracking-wide text-slate-500">${rubric.criterion}</span>
+                        <span class="text-sm font-black text-slate-700 dark:text-slate-300">${rubric.score}/${rubric.maxScore}</span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
+                        <div class="bg-brand-600 h-2 rounded-full" style="width: ${percent}%"></div>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 italic">${rubric.feedback}</p>
+                `;
+                scoreBreakdownGrid.appendChild(scoreCard);
+            });
+
+            reportOverallScore.innerText = calculatedScore;
+            reportMaxScore.innerText = `/${possibleMax}`;
+
+            // AI Plagiarism Gauge
+            const aiProb = data.aiAnalysis.aiProbability;
+            aiProbabilityBadge.innerText = `${aiProb}%`;
+            aiProbabilityBar.style.width = `${aiProb}%`;
+            aiProbabilityExplanation.innerText = data.aiAnalysis.reasoning;
+
+            // Apply gauge styling colors based on range
+            if (aiProb > 60) {
+                aiProbabilityBar.className = "bg-rose-600 h-1.5";
+                aiProbabilityBadge.className = "text-xs font-bold text-rose-600 dark:text-rose-400";
+            } else if (aiProb > 30) {
+                aiProbabilityBar.className = "bg-amber-500 h-1.5";
+                aiProbabilityBadge.className = "text-xs font-bold text-amber-500 dark:text-amber-400";
+            } else {
+                aiProbabilityBar.className = "bg-emerald-600 h-1.5";
+                aiProbabilityBadge.className = "text-xs font-bold text-emerald-600 dark:text-emerald-400";
+            }
+
+            overallFeedbackText.innerText = data.overallFeedback;
+
+            // Extracted OCR text annotated highlight logic
+            renderInteractiveText(data.extractedText, data.annotations);
+
+            // Populate the detailed corrections cards list below
+            annotationsList.innerHTML = '';
+            if (data.annotations.length === 0) {
+                annotationsList.innerHTML = `
+                    <div class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 text-xs flex items-center space-x-2">
+                        <i class="w-4 h-4 text-emerald-500" data-lucide="sparkles"></i>
+                        <span>Splendid! Excellent structural composition. No corrections were identified.</span>
+                    </div>
+                `;
+            } else {
+                data.annotations.forEach((item, idx) => {
+                    const card = document.createElement('div');
+                    card.className = `p-4 rounded-xl border border-l-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/40 ${getThemeBorderAccent(item.type)}`;
+                    card.innerHTML = `
+                        <div class="space-y-1.5">
+                            <div class="flex items-center space-x-2">
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${getBadgeThemeColor(item.type)}">${item.type}</span>
+                                <span class="text-xs text-slate-400">Suggestion #${idx + 1}</span>
+                            </div>
+                            <div class="text-sm font-serif">
+                                <span class="line-through text-slate-400 font-medium decoration-rose-500">"${item.originalSnippet}"</span>
+                                <span class="text-slate-400 mx-1">→</span>
+                                <span class="font-bold text-emerald-600 dark:text-emerald-400">"${item.correction}"</span>
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">${item.note}</p>
+                        </div>
+                    `;
+                    annotationsList.appendChild(card);
+                });
+            }
+
+            lucide.createIcons();
+        }
+
+        // Color coding themes helper functions
+        function getThemeBorderAccent(type) {
+            const t = (type || '').toLowerCase();
+            if (t.includes('spell') || t.includes('typo')) return 'border-rose-400 dark:border-rose-500';
+            if (t.includes('gram')) return 'border-amber-400 dark:border-amber-500';
+            if (t.includes('punctuat')) return 'border-blue-400 dark:border-blue-500';
+            return 'border-indigo-400 dark:border-indigo-500'; // style or other
+        }
+
+        function getBadgeThemeColor(type) {
+            const t = (type || '').toLowerCase();
+            if (t.includes('spell') || t.includes('typo')) return 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-400';
+            if (t.includes('gram')) return 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400';
+            if (t.includes('punctuat')) return 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400';
+            return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-400';
+        }
+
+        // Replace matched original substrings with custom highlight markup safely
+        function renderInteractiveText(text, annotations) {
+            let html = escapeHtml(text);
+
+            // Sort annotations by originalSnippet length descending to avoid replacing sub-strings prematurely
+            const sortedAnnotations = [...annotations].sort((a, b) => b.originalSnippet.length - a.originalSnippet.length);
+
+            sortedAnnotations.forEach((annotation, idx) => {
+                const escapedOriginal = escapeHtml(annotation.originalSnippet);
+                if (escapedOriginal.trim() === '') return;
+
+                // Simple global replacement regex that matches bounds where possible
+                const regex = new RegExp(`(${escapeRegExp(escapedOriginal)})`, 'gi');
+                
+                // Color configuration
+                let underlineColor = 'decoration-rose-500/80 hover:bg-rose-100/40 dark:hover:bg-rose-900/20';
+                const type = annotation.type.toLowerCase();
+                if (type.includes('gram')) {
+                    underlineColor = 'decoration-amber-500/80 hover:bg-amber-100/40 dark:hover:bg-amber-900/20';
+                } else if (type.includes('punctuat')) {
+                    underlineColor = 'decoration-blue-500/80 hover:bg-blue-100/40 dark:hover:bg-blue-900/20';
+                } else if (type.includes('style') || type.includes('coherence')) {
+                    underlineColor = 'decoration-indigo-500/80 hover:bg-indigo-100/40 dark:hover:bg-indigo-900/20';
+                }
+
+                html = html.replace(regex, `<span class="cursor-pointer underline decoration-2 decoration-dashed underline-offset-4 cursor-help transition ${underlineColor}" data-index="${idx}">$1</span>`);
+            });
+
+            // Convert double linebreaks to dynamic markup block parsers
+            extractedTextBody.innerHTML = html.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+
+            // Hook up click listeners to the dynamically-spawned inline spans
+            extractedTextBody.querySelectorAll('span[data-index]').forEach(span => {
+                span.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(span.getAttribute('data-index'));
+                    const annotation = sortedAnnotations[index];
+                    showAnnotationPopover(e, annotation);
+                });
+            });
+        }
+
+        // Display click popup with helpful contextual advice
+        function showAnnotationPopover(event, annotation) {
+            popoverBadge.innerText = annotation.type;
+            popoverBadge.className = `px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wide ${getBadgeThemeColor(annotation.type)}`;
+            popoverOriginal.innerText = `"${annotation.originalSnippet}"`;
+            popoverCorrection.innerText = `"${annotation.correction}"`;
+            popoverNote.innerText = annotation.note;
+
+            // Position relative to window coordinates
+            const rect = event.target.getBoundingClientRect();
+            annotationPopover.style.top = `${window.scrollY + rect.bottom + 8}px`;
+            
+            // Adjust left dynamically on smaller viewports
+            const popoverWidth = 320;
+            let leftPos = window.scrollX + rect.left;
+            if (leftPos + popoverWidth > window.innerWidth) {
+                leftPos = window.innerWidth - popoverWidth - 16;
+            }
+            annotationPopover.style.left = `${Math.max(16, leftPos)}px`;
+            annotationPopover.classList.remove('hidden');
+        }
+
+        // Close Popover Hooks
+        closePopoverBtn.addEventListener('click', () => annotationPopover.classList.add('hidden'));
+        document.addEventListener('click', (e) => {
+            if (!annotationPopover.contains(e.target)) {
+                annotationPopover.classList.add('hidden');
+            }
+        });
+
+        // Utility: Escapes unsafe HTML
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Utility: Escapes RegExp special chars
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        // Load Static Demo Evaluation
+        loadDemoBtn.addEventListener('click', () => {
+            document.getElementById('classCode').value = "AP-LIT-202";
+            document.getElementById('studentName').value = "Jordan Miller";
+            
+            const demoResult = {
+                extractedText: "The Road Not Taken\nBy Jordan\n\nTwo roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could\nTo where it bent in the undergrouth;\n\nThen took the other, as just as fair,\nAnd having perhaps the better claim,\nBecause it was grassy and wanted wear;\nThough as for that the passing there\nHad worn them really about the same.",
+                rubricScores: [
+                    { criterion: "Creativity & Imagination", score: 23, maxScore: 25, feedback: "Beautiful interpretation of classical style and rhythm!" },
+                    { criterion: "Form, Rhythm & Meter", score: 20, maxScore: 25, feedback: "Excellent metric structural alignment. Slight syllable mismatch in third line." },
+                    { criterion: "Figurative Language & Imagery", score: 21, maxScore: 25, feedback: "Engaging environment setup, utilizing metaphoric woods." },
+                    { criterion: "Spelling, Grammar & Flow", score: 22, maxScore: 25, feedback: "Minor spelling and capitalization mishaps analyzed below." }
+                ],
+                overallFeedback: "A breathtaking poetic rendition honoring classic style guidelines. Clear rhythmic pacing and depth in metaphorical imagery. Pay minor attention to the spelled structure of natural features in stanza closings.",
+                aiAnalysis: {
+                    aiProbability: 8,
+                    reasoning: "High variance in syllable choices and specific human spelling anomalies indicative of authentic human creation."
+                },
+                annotations: [
+                    { originalSnippet: "undergrouth", correction: "undergrowth", type: "spelling", note: "Spelled with an 'o' instead of 'ou' in English." },
+                    { originalSnippet: "yellow wood", correction: "yellow wood,", type: "punctuation", note: "Add comma to close parenthetical setting descriptor smoothly." },
+                    { originalSnippet: "Because it was", correction: "because it was", type: "grammar", note: "Lower case recommended following semi-colon." }
+                ]
+            };
+
+            resultsPlaceholder.classList.add('hidden');
+            renderResults(demoResult);
+        });
+    </script>
 </body>
 </html>
