@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OpenGrade - Premium OMR Scanner & Sheet Generator</title>
-  <!-- Offline Tailwind CSS Stylesheet -->
-  <link rel="stylesheet" href="tailwind.min.css">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
- <!-- Dexie.js for IndexedDB Storage -->
-  <script src="dexie.min.js"></script>
+  <!-- Dexie.js for IndexedDB Storage -->
+  <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
   <!-- html2canvas for High Fidelity PNG Export -->
-  <script src="html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     body {
       font-family: 'Inter', sans-serif;
@@ -33,6 +33,28 @@
       color: #0f172a;
       display: inline-block;
       box-sizing: border-box;
+      background-color: #ffffff;
+    }
+
+    /* Force Light Theme Isolation to prevent Browser Dark Mode Color Inversions */
+    #target-sheet-node {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #0f172a !important;
+    }
+    #target-sheet-node * {
+      color: #0f172a !important;
+      border-color: #0f172a !important;
+    }
+    #target-sheet-node .text-slate-400, 
+    #target-sheet-node .text-slate-500,
+    #target-sheet-node h4 {
+      color: #64748b !important; /* Keep column labels & subtitles a distinguished medium gray */
+    }
+    #target-sheet-node .sheet-bubble {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #0f172a !important;
     }
 
     /* Print Specific Rules overriding all utilities */
@@ -884,7 +906,7 @@
             
             <div class="text-center">
               <h1 class="text-xl font-black tracking-tight text-slate-950 uppercase">${name}</h1>
-              <p class="text-[10px] text-slate-500 font-semibold tracking-wider">BUNSURAN NATIONAL HIGH SCHOOL (#MEC)</p>
+              <p class="text-[10px] text-slate-500 font-semibold tracking-wider">OPENGRADE ULTRA-COMPACT 50-OMR TEMPLATE</p>
             </div>
 
             <div class="w-8 h-8 bg-slate-950 flex items-center justify-center relative">
